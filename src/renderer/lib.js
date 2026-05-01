@@ -25,6 +25,15 @@ function formatResetIn(isoString, now) {
   const mins = Math.round(diffMs / 60_000);
   if (mins < 60) return `resets in ${mins}m`;
   const hours = Math.floor(mins / 60);
+  // Day-grain polish: for resets >= 24h away, show "in 5d" or "in 5d 3h"
+  // instead of hour-counts that scroll past readability ("118h 22m").
+  if (hours >= 24) {
+    const days = Math.floor(hours / 24);
+    const remHours = hours % 24;
+    return remHours === 0
+      ? `resets in ${days}d`
+      : `resets in ${days}d ${remHours}h`;
+  }
   const rem = mins % 60;
   return `resets in ${hours}h ${rem}m`;
 }
