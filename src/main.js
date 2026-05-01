@@ -4,7 +4,14 @@ const path = require('path');
 const { app, BrowserWindow, ipcMain, screen } = require('electron');
 
 const { getAccountUsage } = require('./usage');
-const { CH, runWithTimeout, clampToDisplay } = require('./main-lib');
+const {
+  CH,
+  runWithTimeout,
+  clampToDisplay,
+  readJsonSafe,
+  writeJsonAtomic,
+  buildTooltip
+} = require('./main-lib');
 
 if (!app.requestSingleInstanceLock()) {
   app.quit();
@@ -19,6 +26,49 @@ let pollInFlight = false;
 let pollTimer = null;
 let latestUsage = null;
 let resizeTimer = null;
+
+let settings = { openAtLogin: false };
+let settingsPath = null;
+let windowStatePath = null;
+let saveStateTimer = null;
+
+function loadSettings() {
+  settingsPath = path.join(app.getPath('userData'), 'settings.json');
+  settings = readJsonSafe(settingsPath, { openAtLogin: false });
+}
+
+function saveSettings() {
+  if (!settingsPath) return;
+  try {
+    writeJsonAtomic(settingsPath, settings);
+  } catch (err) {
+    console.warn('[settings] save failed:', err.message);
+  }
+}
+
+function loadWindowState() {
+  windowStatePath = path.join(app.getPath('userData'), 'window-state.json');
+  return readJsonSafe(windowStatePath, null);
+}
+
+function saveWindowState() {
+  if (!win || win.isDestroyed() || !windowStatePath) return;
+  if (!win.isVisible()) return;
+  try {
+    const b = win.getBounds();
+    writeJsonAtomic(windowStatePath, { x: b.x, y: b.y, width: 340, height: b.height });
+  } catch (err) {
+    console.warn('[window-state] save failed:', err.message);
+  }
+}
+
+function scheduleWindowStateSave() {
+  if (saveStateTimer) clearTimeout(saveStateTimer);
+  saveStateTimer = setTimeout(() => {
+    saveStateTimer = null;
+    saveWindowState();
+  }, 500);
+}
 
 function defaultBottomRight(work) {
   const margin = 16;
