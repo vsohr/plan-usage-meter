@@ -4,7 +4,7 @@
 
 ## Status
 
-- **Phase:** M3 complete
+- **Phase:** M4 complete
 - **Iteration:** 1 of 5
 - **Worktree:** `c:/git/plan-usage-meter/worktrees/initial-scaffold/`
 - **Branch:** `feat/initial-scaffold`
@@ -17,103 +17,71 @@
 | M1 | Scaffold & detection bridge | 11 | **complete (2026-05-01)** |
 | M2 | Polling & IPC | 6 | **complete (2026-05-01)** |
 | M3 | Renderer cards & relative time | 5 | **complete (2026-05-01)** |
-| M4 | Tray, persistence, edge cases | 8 | pending |
+| M4 | Tray, persistence, edge cases | 8 | **complete (2026-05-01)** |
 | M5 | Tests, build, README, polish | 7 | pending |
 
 ### M1 complete — 2026-05-01
 
-**Files created (worktree-relative):**
-- `package.json`, `package-lock.json`
-- `src/main.js`, `src/preload.js`
-- `src/usage/index.js` (verbatim copy of `c:/claude-portal/lib/codex-usage.js`, SHA-256 `3da07d5c8cfb...`, 12,093 bytes / 393 lines)
-- `src/renderer/index.html`, `src/renderer/styles.css`, `src/renderer/renderer.js`
-- `scripts/check-icons.js`
-- `assets/tray.png` (84 bytes — 16×16 transparent placeholder), `assets/icon.ico` (1871 bytes — multi-size 16/32/48/64/128/256 placeholder)
-- `electron-builder.yml`
-- `README.md`
+Scaffold + verbatim detection bridge + asset placeholders + electron-builder config. AC1, AC22 (build-time icon check). Detection module at `src/usage/index.js` is a verbatim copy of `c:/claude-portal/lib/codex-usage.js` — do not edit. Total project tasks: 38 (S/M only).
 
-**Commits (8 atomic):** `M1.T2/T3`, `M1.T4`, `M1.T5`, `M1.T6`, `M1.T7`, `M1.T8`, `M1.T9`, `M1.T10`. M1.T1 (worktree bootstrap) was already in place at session start. M1.T11 is this PROGRESS.md update commit.
-
-**`npm install`:** ok. Electron 28.3.3 + electron-builder 24.13.3 installed cleanly with no `gyp ERR!` and no native rebuild — AC1 confirmed. (Initial run failed with ENOSPC; freed 6.5 GB by clearing the npm cache and the partial `node_modules`, then succeeded.)
-
-**`npm start` smoke:** ok. Ran `node_modules/electron/dist/electron.exe .` directly with `ELECTRON_RUN_AS_NODE` unset; process stayed alive past 5 seconds and stdout printed `[poll:M1] {"available":true,"providers":["codex","claude"],"label":"GPT 18%"}` — proves Electron main started, BrowserWindow created, single-instance lock acquired, and `getAccountUsage()` resolved end-to-end.
-
-**Notes / surprises:**
-- The shell harness in this session has `ELECTRON_RUN_AS_NODE=1` exported, which forces Electron to run as plain Node (`require('electron')` returns the path string, no `app` object). The fix is to unset that variable before `npm start`. This will not affect the user running `npm start` from a normal terminal (where the variable is not set). Worth noting for QA: if `npm start` ever errors with `Cannot read properties of undefined (reading 'requestSingleInstanceLock')`, check `echo $ELECTRON_RUN_AS_NODE`.
-- AC10 (single-instance lock) and AC2 (window position/frame style) are not yet visually confirmed in this session because we cannot interact with a windowed process. Code is in place per spec; full AC verification is M5.T7 / QA.
-- Asset placeholders are minimum-viable: a 16×16 transparent PNG with a centered light-grey block, and a multi-size ICO of solid blue layers. They satisfy `check-icons.js` and electron-builder's 256-layer requirement; replace before public release per README.
-
-**Total tasks:** 38 atomic tasks (S/M only — no L).
+**Harness gotcha:** shell exports `ELECTRON_RUN_AS_NODE=1`, which forces `electron.exe` to run as plain Node. Unset it before `npm start`. Symptom: `Cannot read properties of undefined (reading 'requestSingleInstanceLock')`.
 
 ### M2 complete — 2026-05-01
 
-**Files created/modified:**
-- Created: `src/main-lib.js` (112 lines) — channel constants `CH`, `runWithTimeout`, `buildTimeoutPayload`, `buildErrorPayload`, `readJsonSafe`, `writeJsonAtomic`, `clampToDisplay`, `buildTooltip`. Pure functions, no `electron` import.
-- Modified: `src/main.js` (134 lines) — replaced M1 sanity poll with full polling loop: `setInterval(60_000)` with immediate first call, `pollInFlight` serialisation flag, `latestUsage` cache, `broadcastUsage` via `webContents.send`, five IPC handlers (`usage:refresh` invoke, `window:hide`, `app:quit`, `window:report-height` send), `before-quit` clears the interval.
-- Modified: `src/preload.js` (23 lines) — exposes frozen `window.api` with `onUsage(cb)` (returns unsubscribe fn), `refreshNow()` (invoke), `hide()`, `quit()`, `reportHeight(px)`. Channel constants duplicated locally per sandbox boundary rule.
-- Modified: `src/renderer/renderer.js` (18 lines) — subscribes to `onUsage` and console-logs each payload; refresh button calls `refreshNow()`; close button calls `hide()`. M3 will replace this with real cards.
-
-**Commits (4 atomic):** `M2.T1` (main-lib helpers), `M2.T2` (polling + IPC in main), `M2.T3` (preload api), `M2.T4` (renderer logging). M2.T5/T6 are verification-only (no commits).
-
-**Verification:**
-- `runWithTimeout(() => new Promise(()=>{}), 100)` → resolves with `errors.timeout: getAccountUsage exceeded 100ms`. AC19 wrapper proven.
-- Synthetic timeout payload confirmed: `label: 'AI --'`, `providers.codex.message: 'Provider timed out'`, `providers.claude.message: 'Provider timed out'`. Shape matches ARCHITECTURE.md §"Synthetic timeout payload".
-- End-to-end via Node: `runWithTimeout(getAccountUsage, 15000)` → returns real provider data (`available:true, label:'GPT 22%', providers:[codex,claude]`). Detection bridge through the wrapper works.
-- 1ms-timeout local test (reverted before commit): forced the wrapper down the timeout path; produced the synthetic payload above. AC9/AC19 path proven.
-- `electron.exe .` boots; multiple electron.exe processes (main + renderer + GPU + utility) stay alive past 10 seconds, proving the IPC handlers register and the poll loop runs without crashing.
-
-**ACs satisfied:**
-- AC4 (polling + manual refresh): full — 60s interval, immediate first poll, `usage:refresh` invoke handler triggers immediate poll.
-- AC9 (network failure): wrapper-side proven — `runWithTimeout` always resolves; provider errors propagate as `provider.message` from upstream `codex-usage.js`.
-- AC15 (debounced refresh-now plumbing): IPC channel `usage:refresh` is in place; tray-side debounce lands in M4.
-- AC16 (quit during in-flight poll): `before-quit` clears the interval; `app.isQuitting` guards `poll()`; backstop `unhandledRejection`/`uncaughtException` listeners log only.
-- AC19 (15s timeout per call): `runWithTimeout(getAccountUsage, 15_000)` invoked on every poll; synthetic payload returned on timeout; never throws.
-- AC23 (no console errors, partial): no errors on the smoke path; full clean-run AC23 verified in M5.
-
-**Notes / surprises:**
-- Electron stdout capture in this Bash environment is unreliable — `electron.exe` does not flush JS `console.log` to redirected stdout when not attached to an interactive console. M1's stdout was captured via a different terminal context. Verification therefore relies on (a) Node-side `runWithTimeout` + `getAccountUsage` smoke, (b) timeout-payload shape match, (c) live `tasklist.exe` showing electron.exe processes alive. Renderer-side `console.log('[renderer:M2] usage update', ...)` is observable in DevTools (`PUM_DEVTOOLS=1 npm start`).
-- The TASKS.md plan exposes `refreshNow()` on `window.api` (matching ARCHITECTURE.md §IPC Contracts and §Renderer Architecture). The user kick-off prompt mentioned `refresh()`/channel names `usage`/`refresh-now`; followed TASKS.md verbatim because (a) it's the binding plan, (b) renderer.js / preload.js identifiers must match, (c) ARCHITECTURE.md is the binding HOW spec.
-- `void clampToDisplay;` in main.js silences the unused-import lint until M4 wires window-state restoration.
+Polling + IPC. Created `src/main-lib.js` (pure helpers: `CH`, `runWithTimeout`, `buildTimeoutPayload`, `buildErrorPayload`, `readJsonSafe`, `writeJsonAtomic`, `clampToDisplay`, `buildTooltip`). `src/main.js` polling loop with `pollInFlight` serialisation + `latestUsage` cache + 5 IPC handlers. Preload exposes frozen `window.api`. Channel-name strings duplicated between main-lib and preload per sandbox boundary rule. Satisfies AC4, AC9 (wrapper side), AC16 (interval clear), AC19, AC23 (partial).
 
 ### M3 complete — 2026-05-01
 
-**Files created/modified:**
-- Created: `src/renderer/lib.js` (34 lines) — pure helpers `thresholdClass`, `clampPercent`, `formatResetIn`. `module.exports` guarded by `typeof module` so the same file works as a `<script>` tag in renderer and a `require()` target in `node:test` (M5.T1/T2).
-- Modified: `src/renderer/styles.css` (123 lines, budget 250) — full rewrite. Dark theme with `rgba(20,20,24,0.92)` body bg, card surfaces at `rgba(34,34,40,0.85)`, bar fills green→amber→red via `.warn`/`.error` classes with `transition: width 200ms ease-out, background-color 200ms ease-out`. Header drag region + button no-drag region, `.spinning` spin keyframe (0.8s linear infinite). Unavailable cards: `opacity: 0.55` + italic `.message`. `will-change: contents` on `#cards` for AC24 belt-and-braces.
-- Modified: `src/renderer/index.html` (22 lines, budget 80) — added `<script src="lib.js"></script>` before `renderer.js`. CSP unchanged (strict).
-- Modified: `src/renderer/renderer.js` (159 lines, budget 300) — full rewrite. `renderCards(usage)` builds DOM via `createDocumentFragment` + `replaceChildren` (single-mutation atomic swap, AC24). `buildCard` handles available + unavailable branches. `buildWindowRow` defends against non-numeric `usedPercent` (renders 0% bar + "—" text, never throws). `scheduleRender` coalesces renders into one `requestAnimationFrame` tick and reports height after paint. `setInterval(30_000)` re-renders for relative-time tick without re-polling. Refresh button: `.spinning` class while in flight; cleared on `usage:update` push or 500ms after `accepted: false`.
+Renderer cards + relative time. Created `src/renderer/lib.js` (pure: `thresholdClass`, `clampPercent`, `formatResetIn`; `module.exports` guarded by `typeof module` so the file works as both `<script>` and `require` target). Renderer rewrites `styles.css` (dark theme, color thresholds, drag region, spin keyframe) + `renderer.js` (rAF-batched `replaceChildren` for atomic swap, refresh-spinner state, height reporting with `+1px` guard). AC2, AC3, AC11 (renderer side), AC12, AC18, AC24.
 
-**Commits (3 atomic):** `M3.T1` (lib helpers), `M3.T2` (styles), `M3.T3` (renderer + html). M3.T4/T5 are verification-only (no commits).
+**Visual smoke gotcha:** GDI `CopyFromScreen` returns transparent for `transparent: true` BrowserWindows on Win11. `PrintWindow` with `PW_RENDERFULLCONTENT=2` is the working capture path.
+
+### M4 complete — 2026-05-01
+
+**Files modified:**
+- `src/main.js` (286 lines, budget 350) — extended `electron` require with `Tray, Menu, nativeImage`; added `main-lib` imports for `readJsonSafe`, `writeJsonAtomic`, `buildTooltip`. Added `loadSettings`/`saveSettings`/`loadWindowState`/`saveWindowState`/`scheduleWindowStateSave` (debounced 500ms, skipped while window hidden). `createWindow` now reads saved state, runs `clampToDisplay` against the matching display, falls back to `defaultBottomRight` if saved coords are off-screen (AC13). Added `tray`, `debounce`, `toggleWindow`, `setOpenAtLogin`, `rebuildTrayMenu`, `createTray`. Tray click is debounced 250ms (AC15). `poll()` updates tooltip + rebuilds menu on every tick. `whenReady` calls `loadSettings`/`createWindow`/`createTray` then re-asserts `setLoginItemSettings` from persisted intent. `before-quit` clears timers, saves window state once more, destroys tray.
+
+**Commits (3 atomic, T4–T7 verification-only):** `M4.T1` (persistence helpers), `M4.T2` (window-state restore + off-screen fallback), `M4.T3` (tray + login-item).
 
 **Verification:**
-- `node -e` smoke on `lib.js` printed `'' warn error '' | — | resets in 30m | resets soon | resets in 3h 12m` — all four `thresholdClass` boundaries + four `formatResetIn` paths (null, future, negative-skew, future-with-hours) all match expected.
-- `npm start` (electron.exe with `ELECTRON_RUN_AS_NODE` unset): two BrowserWindow processes plus GPU + utility children stayed alive past 8s. Window enumerated via `EnumWindows` at (2204,1108)–(2544,1376) — 340×269 frameless, bottom-right, 16-px margin. Auto-resize fired (initial 180 → 269). Captured via `PrintWindow` with `PW_RENDERFULLCONTENT=2` (GDI-only `CopyFromScreen` returns transparent buffer for layered/composited Electron windows on Win11; `PrintWindow` is the working path for visual smoke against this app type).
-- Screenshot showed: header with title + spinning+close buttons, Claude card with `Max` plan + Session 69% (green) "resets in 3h 32m" + Weekly 37% "resets in 118h 22m" + Sonnet weekly 0% "—", Codex card with `Prolite` plan + Session 24% + Weekly 15%. All bars rendered with correct color classes (all <75% so all green this run).
-- stdout/stderr both empty (no errors, no unhandled rejections) for both the regular run and the `PUM_DEVTOOLS=1` run. AC23 verified for the M3 happy path.
+- Helpers smoke (Node, no Electron): `readJsonSafe` on missing file → defaults; on malformed JSON → `console.warn` + defaults (no clobber); `writeJsonAtomic` then re-read round-trips. AC17 confirmed via direct helper invocation.
+- `clampToDisplay` smoke: null → null; inside → identity; `{x:99999,y:99999}` → null; `{x:-9999,y:-9999}` → null. AC13 fallback path proven.
+- `electron.exe .` boot: stdout empty, stderr only Chromium SIGTERM teardown noise (network service / GPU exit_code=143 from `timeout`-kill, not from our JS). No `unhandledRejection`, no `[poll] unexpected`. AC23 happy-path clean.
+- Window movement / drag and visual tray verification deferred to QA (M5.T7) — same Electron-on-headless-bash limitation as M2/M3.
 
-**ACs satisfied (M3 portion):**
-- AC2 (visual): full — frameless 340-px window, transparent background, dark cards, system font.
-- AC3 (renders all providers): full — `Object.keys(usage.providers)` iteration; available cards show plan + bars + relative-time; unavailable cards muted with `provider.message`.
-- AC11 (zero credentials): renderer-side full — "Not detected" card path coded and visually rendered when `provider.available !== true`. (Live no-creds smoke is M5.T7.)
-- AC12 (expired/invalid creds): renderer-side full — `provider.message` is the body of the unavailable card.
-- AC18 (clock skew): full — `formatResetIn` returns `'resets soon'` for any `diffMs <= 60_000`, which includes negative deltas. Verified in node smoke.
-- AC23 (no console errors): partial — clean run produced zero stdout/stderr errors. Full quit-and-reopen cycle is M5.
-- AC24 (no flicker on auto-resize): full — `replaceChildren(fragment)` is the single-mutation swap; `requestAnimationFrame` batches render+reportHeight; main-side `setBounds(..., false)` is bottom-anchored (already wired in M2). Renderer-side adds `+1px` to `documentElement.scrollHeight` to avoid sub-pixel jitter.
+**ACs satisfied:**
+- AC5 (close-to-tray): `win.on('close')` `e.preventDefault()` + `win.hide()` when `!app.isQuitting`. `Quit` menu sets `app.isQuitting = true` then `app.quit()`.
+- AC6 (tooltip): `tray.setToolTip(buildTooltip(usage))` on every poll.
+- AC7 (persistence path): settings.json written on toggle; `setLoginItemSettings` re-asserted on every launch from persisted intent. Reboot persistence is QA-time only, manual.
+- AC10 (single-instance): unchanged from M1; tray makes `second-instance` re-show effective.
+- AC11 (zero credentials): `buildTooltip` returns `'No providers detected'` when no provider is `available`.
+- AC13 (off-screen recovery): saved coords checked via `getDisplayMatching` + `clampToDisplay`; null result → `defaultBottomRight`.
+- AC14 (single display): code uses `getAllDisplays`-equivalent semantics via `getDisplayMatching`; no assumption of secondary display.
+- AC15 (tray-click debounce): `debounce(toggleWindow, 250)` on `'click'`.
+- AC16 (quit during in-flight poll): `before-quit` clears `pollTimer`; `poll()` re-checks `app.isQuitting` after the awaited `runWithTimeout` and short-circuits before mutating state. No `await poll()` anywhere — fire-and-forget.
+- AC17 (deleted/malformed settings.json): `readJsonSafe` defaults silently on ENOENT, warns + defaults on parse error. Fresh write on first toggle.
+- AC20 (non-default %USERPROFILE%): unchanged — `app.getPath('userData')` is Electron-managed; credential paths come from the verbatim detection module.
+- AC21 (DPI scaling): `clampToDisplay` uses `display.workArea` (logical pixels). Electron returns DIPs at any scale, so no math change needed.
+- AC23 (happy-path clean): boot smoke captured zero stdout/stderr from JS.
+
+**Out of scope for this subagent (flagged for QA):**
+- AC7 across-reboot: full Windows reboot required to verify `openAtLogin` actually launches the app on next boot. Manual M5.T7 step.
+- AC15 visual idempotence: requires interactive tray clicks. Manual M5.T7.
+- AC16 1-second-quit deadline: requires injecting a temporary delay into `getAccountUsage` and observing process exit. M4.T4 documents the manual experiment (verbatim policy: do not commit the injected delay).
 
 **Notes / surprises:**
-- Plan deviation: Plan's `el()` helper accepted a `style` opts hash; I dropped that branch (unused). Renderer.js stayed at 159 lines well under the 300-line budget.
-- Plan deviation: Renderer's `reportHeight()` uses `document.documentElement.scrollHeight + 1` instead of `document.body.scrollHeight` from the plan. Two reasons: (a) `documentElement.scrollHeight` is the conventional measure for full-content height including the html box, (b) the +1 px guard against sub-pixel jitter at fractional DPI is mentioned explicitly in the kick-off prompt's AC24 hint. Bottom-anchored `setBounds` from M2 still does the heavy lifting — the +1 is belt-and-braces.
-- Visual smoke required `PrintWindow` API instead of `CopyFromScreen` because Electron with `transparent: true` produces a layered window that GDI screen-capture sees through. Documented in CODE-REVIEW.md if helpful.
-- Console.warn (not console.error) is used only for truly unexpected states: missing preload bridge, refresh API throw. Happy path produces zero log output (per AC23).
+- Plan deviation: I added `win.on('show', rebuildTrayMenu)` and `win.on('hide', rebuildTrayMenu)`. Without those, the tray menu's first item would say "Hide" forever (until next poll forces a rebuild). Cheap; keeps the menu in sync with reality.
+- Plan deviation: `saveWindowState` skips when `!win.isVisible()`. During close-to-tray Electron may fire `move` events as the window slides off-screen; we don't want to persist those phantom positions. The last legitimate move/resize already triggered a 500ms debounced write before the close, so no data is lost.
+- `Tray.isDestroyed()` is guarded everywhere to avoid throwing on the post-quit code path (in case `before-quit` and a late `poll()` race).
+- Final main.js is 286 lines, comfortably under the 350-line cap.
 
 ## Current task
 
-- None — M3 done. Awaiting M4 kick-off.
+- None — M4 done. Awaiting M5 kick-off (tests + build + README + AC walkthrough).
 
 ## Next steps
 
-1. M4: tray icon, tooltip, context menu, Open at login, window-state persistence, edge-case handling.
-2. M5: tests (`node:test`), README, full AC1–AC24 walkthrough.
+1. M5: `node:test` for color thresholds, relative time, clamp bounds; `npm run dist` (NSIS + portable); README rewrite; full AC1–AC24 walkthrough including manual reboot for AC7.
 
 ## Decisions log
 
