@@ -1,0 +1,18 @@
+{
+  "name": "plan-usage-meter",
+  "version": "0.1.0",
+  "description": "Always-on-top desktop widget for Claude / Codex / Hermes plan-usage quotas.",
+  "main": "src/main.js",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "test": "node --test tests/",
+    "prebuild": "node scripts/check-icons.js",
+    "dist": "npm run prebuild && electron-builder",
+    "dist:portable": "npm run prebuild && electron-builder --win portable"
+  },
+  "devDependencies": {
+    "electron": "^28.0.0",
+    "electron-builder": "^24.13.0"
+  }
+}
