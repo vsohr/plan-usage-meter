@@ -84,7 +84,19 @@ function defaultBottomRight(work) {
 
 function createWindow() {
   const work = screen.getPrimaryDisplay().workArea;
-  const bounds = defaultBottomRight(work);
+  const saved = loadWindowState();
+  let bounds = null;
+  if (saved && typeof saved.x === 'number' && typeof saved.y === 'number') {
+    const display = screen.getDisplayMatching({
+      x: saved.x,
+      y: saved.y,
+      width: 340,
+      height: saved.height || 200
+    });
+    bounds = clampToDisplay(saved, display);
+  }
+  if (!bounds) bounds = defaultBottomRight(work);
+
   win = new BrowserWindow({
     width: bounds.width,
     height: bounds.height,
@@ -114,6 +126,8 @@ function createWindow() {
     e.preventDefault();
     win.hide();
   });
+  win.on('moved',   scheduleWindowStateSave);
+  win.on('resized', scheduleWindowStateSave);
 }
 
 function broadcastUsage(usage) {
@@ -175,10 +189,10 @@ app.whenReady().then(() => {
 app.on('before-quit', () => {
   app.isQuitting = true;
   if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+  if (saveStateTimer) { clearTimeout(saveStateTimer); saveStateTimer = null; }
+  saveWindowState();
 });
 
 app.on('window-all-closed', () => {
   // Tray takes over in M4. For M2, hide-not-quit is wired via win.on('close').
 });
-
-void clampToDisplay; // M4 wires this.
