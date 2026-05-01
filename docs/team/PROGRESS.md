@@ -4,21 +4,44 @@
 
 ## Status
 
-- **Phase:** Planning complete
+- **Phase:** M1 complete
 - **Iteration:** 1 of 5
-- **Worktree:** not yet created
-- **Branch:** `feat/initial-scaffold` (will be created in Phase 4.5 — first action of M1.T1)
+- **Worktree:** `c:/git/plan-usage-meter/worktrees/initial-scaffold/`
+- **Branch:** `feat/initial-scaffold`
 - **Plan documents:** `docs/team/SPEC.md`, `docs/team/ARCHITECTURE.md`, `docs/team/TASKS.md` (this file's sibling)
 
 ## Milestone status
 
 | ID | Title | Tasks | Status |
 |---|---|---|---|
-| M1 | Scaffold & detection bridge | 11 | pending |
+| M1 | Scaffold & detection bridge | 11 | **complete (2026-05-01)** |
 | M2 | Polling & IPC | 6 | pending |
 | M3 | Renderer cards & relative time | 6 | pending |
 | M4 | Tray, persistence, edge cases | 8 | pending |
 | M5 | Tests, build, README, polish | 7 | pending |
+
+### M1 complete — 2026-05-01
+
+**Files created (worktree-relative):**
+- `package.json`, `package-lock.json`
+- `src/main.js`, `src/preload.js`
+- `src/usage/index.js` (verbatim copy of `c:/claude-portal/lib/codex-usage.js`, SHA-256 `3da07d5c8cfb...`, 12,093 bytes / 393 lines)
+- `src/renderer/index.html`, `src/renderer/styles.css`, `src/renderer/renderer.js`
+- `scripts/check-icons.js`
+- `assets/tray.png` (84 bytes — 16×16 transparent placeholder), `assets/icon.ico` (1871 bytes — multi-size 16/32/48/64/128/256 placeholder)
+- `electron-builder.yml`
+- `README.md`
+
+**Commits (8 atomic):** `M1.T2/T3`, `M1.T4`, `M1.T5`, `M1.T6`, `M1.T7`, `M1.T8`, `M1.T9`, `M1.T10`. M1.T1 (worktree bootstrap) was already in place at session start. M1.T11 is this PROGRESS.md update commit.
+
+**`npm install`:** ok. Electron 28.3.3 + electron-builder 24.13.3 installed cleanly with no `gyp ERR!` and no native rebuild — AC1 confirmed. (Initial run failed with ENOSPC; freed 6.5 GB by clearing the npm cache and the partial `node_modules`, then succeeded.)
+
+**`npm start` smoke:** ok. Ran `node_modules/electron/dist/electron.exe .` directly with `ELECTRON_RUN_AS_NODE` unset; process stayed alive past 5 seconds and stdout printed `[poll:M1] {"available":true,"providers":["codex","claude"],"label":"GPT 18%"}` — proves Electron main started, BrowserWindow created, single-instance lock acquired, and `getAccountUsage()` resolved end-to-end.
+
+**Notes / surprises:**
+- The shell harness in this session has `ELECTRON_RUN_AS_NODE=1` exported, which forces Electron to run as plain Node (`require('electron')` returns the path string, no `app` object). The fix is to unset that variable before `npm start`. This will not affect the user running `npm start` from a normal terminal (where the variable is not set). Worth noting for QA: if `npm start` ever errors with `Cannot read properties of undefined (reading 'requestSingleInstanceLock')`, check `echo $ELECTRON_RUN_AS_NODE`.
+- AC10 (single-instance lock) and AC2 (window position/frame style) are not yet visually confirmed in this session because we cannot interact with a windowed process. Code is in place per spec; full AC verification is M5.T7 / QA.
+- Asset placeholders are minimum-viable: a 16×16 transparent PNG with a centered light-grey block, and a multi-size ICO of solid blue layers. They satisfy `check-icons.js` and electron-builder's 256-layer requirement; replace before public release per README.
 
 **Total tasks:** 38 atomic tasks (S/M only — no L).
 
