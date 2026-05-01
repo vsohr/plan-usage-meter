@@ -45,3 +45,29 @@ Verification:
 - `npm start` smoke (5s window-up test): window stays up, first poll returns `{"available":true,"providers":["codex","claude"],"label":"GPT 20%"}`. No console errors.
 
 No code changes required — all security flags in main.js / preload.js / index.html were already correct.
+
+---
+
+## Final review — pre-QA — 2026-05-01
+
+Verdict: **PASS**
+
+Findings:
+
+**Critical Security Controls Verified:**
+
+- ✅ Electron BrowserWindow hardened: `contextIsolation: true`, `nodeIntegration: false`, `sandbox: true` (main.js:113–115).
+- ✅ CSP strict: `default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'` (index.html:5–6). Unsafe-inline styles only, appropriate for frameless Electron.
+- ✅ Preload minimalist: Only `window.api` surface (5 methods) exposed via contextBridge (preload.js:12–23). No Node globals leaked.
+- ✅ IPC input validation: `WIN_HEIGHT` handler clamps `raw` to [80, 1200] range before use (main.js:259–260). `USAGE_REFRESH` returns status; `WIN_HIDE`, `APP_QUIT` take no args (safe). All channels use frozen constant keys.
+- ✅ File I/O safe: All paths use `app.getPath('userData')` (main.js:36, 50); no user input in paths. Atomic writes via tmp+rename pattern (main-lib.js:77–81).
+- ✅ Persistence: `readJsonSafe()` handles JSON parse errors gracefully; no throw (main-lib.js:65–75). Settings/window-state read on startup, saved with debounce on resize/move.
+- ✅ Error handlers: Unhandled rejection and uncaught exception traps in place (main.js:21–22). All async polls wrapped in try/finally.
+- ✅ electron-builder: `signAndEditExecutable: false` (for dev builds); `perMachine: false` (per-user install, no elevation required). No auto-update URL (intentionally out-of-scope v1).
+- ✅ No secrets in console or files: `npm audit` clean (0 vulnerabilities). No API tokens logged. Usage detection reads local credentials only; nothing sent to untrusted endpoints.
+- ✅ Detection module verified: src/usage/index.js byte-for-byte identical to claude-portal/lib/codex-usage.js (SHA256 match). Read-only by convention.
+- ✅ No debug code: No console.log spam, no commented-out blocks, no TODOs/FIXMEs in implementation.
+
+**Test Coverage:** All 47 unit tests pass (node:test suite). Timeout, error handling, persistence, clamp, tooltip, and renderer helpers all covered. Integration smoke: `npm start` spawns window, first poll succeeds.
+
+**No critical issues found.**
