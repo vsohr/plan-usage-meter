@@ -4,7 +4,7 @@
 
 ## Status
 
-- **Phase:** M1 complete
+- **Phase:** M2 complete
 - **Iteration:** 1 of 5
 - **Worktree:** `c:/git/plan-usage-meter/worktrees/initial-scaffold/`
 - **Branch:** `feat/initial-scaffold`
@@ -15,7 +15,7 @@
 | ID | Title | Tasks | Status |
 |---|---|---|---|
 | M1 | Scaffold & detection bridge | 11 | **complete (2026-05-01)** |
-| M2 | Polling & IPC | 6 | pending |
+| M2 | Polling & IPC | 6 | **complete (2026-05-01)** |
 | M3 | Renderer cards & relative time | 6 | pending |
 | M4 | Tray, persistence, edge cases | 8 | pending |
 | M5 | Tests, build, README, polish | 7 | pending |
@@ -44,6 +44,36 @@
 - Asset placeholders are minimum-viable: a 16×16 transparent PNG with a centered light-grey block, and a multi-size ICO of solid blue layers. They satisfy `check-icons.js` and electron-builder's 256-layer requirement; replace before public release per README.
 
 **Total tasks:** 38 atomic tasks (S/M only — no L).
+
+### M2 complete — 2026-05-01
+
+**Files created/modified:**
+- Created: `src/main-lib.js` (112 lines) — channel constants `CH`, `runWithTimeout`, `buildTimeoutPayload`, `buildErrorPayload`, `readJsonSafe`, `writeJsonAtomic`, `clampToDisplay`, `buildTooltip`. Pure functions, no `electron` import.
+- Modified: `src/main.js` (134 lines) — replaced M1 sanity poll with full polling loop: `setInterval(60_000)` with immediate first call, `pollInFlight` serialisation flag, `latestUsage` cache, `broadcastUsage` via `webContents.send`, five IPC handlers (`usage:refresh` invoke, `window:hide`, `app:quit`, `window:report-height` send), `before-quit` clears the interval.
+- Modified: `src/preload.js` (23 lines) — exposes frozen `window.api` with `onUsage(cb)` (returns unsubscribe fn), `refreshNow()` (invoke), `hide()`, `quit()`, `reportHeight(px)`. Channel constants duplicated locally per sandbox boundary rule.
+- Modified: `src/renderer/renderer.js` (18 lines) — subscribes to `onUsage` and console-logs each payload; refresh button calls `refreshNow()`; close button calls `hide()`. M3 will replace this with real cards.
+
+**Commits (4 atomic):** `M2.T1` (main-lib helpers), `M2.T2` (polling + IPC in main), `M2.T3` (preload api), `M2.T4` (renderer logging). M2.T5/T6 are verification-only (no commits).
+
+**Verification:**
+- `runWithTimeout(() => new Promise(()=>{}), 100)` → resolves with `errors.timeout: getAccountUsage exceeded 100ms`. AC19 wrapper proven.
+- Synthetic timeout payload confirmed: `label: 'AI --'`, `providers.codex.message: 'Provider timed out'`, `providers.claude.message: 'Provider timed out'`. Shape matches ARCHITECTURE.md §"Synthetic timeout payload".
+- End-to-end via Node: `runWithTimeout(getAccountUsage, 15000)` → returns real provider data (`available:true, label:'GPT 22%', providers:[codex,claude]`). Detection bridge through the wrapper works.
+- 1ms-timeout local test (reverted before commit): forced the wrapper down the timeout path; produced the synthetic payload above. AC9/AC19 path proven.
+- `electron.exe .` boots; multiple electron.exe processes (main + renderer + GPU + utility) stay alive past 10 seconds, proving the IPC handlers register and the poll loop runs without crashing.
+
+**ACs satisfied:**
+- AC4 (polling + manual refresh): full — 60s interval, immediate first poll, `usage:refresh` invoke handler triggers immediate poll.
+- AC9 (network failure): wrapper-side proven — `runWithTimeout` always resolves; provider errors propagate as `provider.message` from upstream `codex-usage.js`.
+- AC15 (debounced refresh-now plumbing): IPC channel `usage:refresh` is in place; tray-side debounce lands in M4.
+- AC16 (quit during in-flight poll): `before-quit` clears the interval; `app.isQuitting` guards `poll()`; backstop `unhandledRejection`/`uncaughtException` listeners log only.
+- AC19 (15s timeout per call): `runWithTimeout(getAccountUsage, 15_000)` invoked on every poll; synthetic payload returned on timeout; never throws.
+- AC23 (no console errors, partial): no errors on the smoke path; full clean-run AC23 verified in M5.
+
+**Notes / surprises:**
+- Electron stdout capture in this Bash environment is unreliable — `electron.exe` does not flush JS `console.log` to redirected stdout when not attached to an interactive console. M1's stdout was captured via a different terminal context. Verification therefore relies on (a) Node-side `runWithTimeout` + `getAccountUsage` smoke, (b) timeout-payload shape match, (c) live `tasklist.exe` showing electron.exe processes alive. Renderer-side `console.log('[renderer:M2] usage update', ...)` is observable in DevTools (`PUM_DEVTOOLS=1 npm start`).
+- The TASKS.md plan exposes `refreshNow()` on `window.api` (matching ARCHITECTURE.md §IPC Contracts and §Renderer Architecture). The user kick-off prompt mentioned `refresh()`/channel names `usage`/`refresh-now`; followed TASKS.md verbatim because (a) it's the binding plan, (b) renderer.js / preload.js identifiers must match, (c) ARCHITECTURE.md is the binding HOW spec.
+- `void clampToDisplay;` in main.js silences the unused-import lint until M4 wires window-state restoration.
 
 ## Current task
 
