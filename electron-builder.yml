@@ -21,6 +21,7 @@ win:
         - x64
   icon: assets/icon.ico
   artifactName: "${productName}-${version}-${arch}.${ext}"
+  signAndEditExecutable: false
 
 nsis:
   oneClick: false
