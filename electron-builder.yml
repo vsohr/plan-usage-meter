@@ -1,0 +1,34 @@
+appId: com.vsohr.plan-usage-meter
+productName: Plan Usage Meter
+copyright: Copyright (c) 2026 vsohr
+
+directories:
+  output: dist
+  buildResources: assets
+
+files:
+  - "src/**/*"
+  - "assets/**/*"
+  - "package.json"
+
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64
+    - target: portable
+      arch:
+        - x64
+  icon: assets/icon.ico
+  artifactName: "${productName}-${version}-${arch}.${ext}"
+
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: "Plan Usage Meter"
+
+portable:
+  artifactName: "${productName}-${version}-portable.${ext}"
