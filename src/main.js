@@ -1,7 +1,7 @@
 'use strict';
 
 const path = require('path');
-const { app, BrowserWindow, ipcMain, screen } = require('electron');
+const { app, BrowserWindow, ipcMain, screen, Tray, Menu, nativeImage } = require('electron');
 
 const { getAccountUsage } = require('./usage');
 const {
@@ -125,9 +125,80 @@ function createWindow() {
     if (app.isQuitting) return;
     e.preventDefault();
     win.hide();
+    rebuildTrayMenu();
   });
+  win.on('show', rebuildTrayMenu);
+  win.on('hide', rebuildTrayMenu);
   win.on('moved',   scheduleWindowStateSave);
   win.on('resized', scheduleWindowStateSave);
+}
+
+let tray = null;
+
+function debounce(fn, ms) {
+  let t = null;
+  return (...args) => {
+    if (t) return;
+    t = setTimeout(() => { t = null; }, ms);
+    fn(...args);
+  };
+}
+
+function toggleWindow() {
+  if (!win) return;
+  if (win.isVisible()) win.hide();
+  else { win.show(); win.focus(); }
+}
+
+function setOpenAtLogin(value) {
+  const desired = !!value;
+  try {
+    app.setLoginItemSettings({
+      openAtLogin: desired,
+      openAsHidden: true,
+      args: desired ? ['--hidden'] : []
+    });
+    settings.openAtLogin = desired;
+  } catch (err) {
+    console.warn('[setOpenAtLogin] failed:', err.message);
+  }
+  saveSettings();
+  rebuildTrayMenu();
+}
+
+function rebuildTrayMenu() {
+  if (!tray || tray.isDestroyed()) return;
+  const visible = !!(win && win.isVisible());
+  const template = [
+    { label: visible ? 'Hide' : 'Show', click: toggleWindow },
+    { label: 'Refresh now', click: () => poll() },
+    { type: 'separator' },
+    {
+      label: 'Open at login',
+      type: 'checkbox',
+      checked: !!settings.openAtLogin,
+      click: (item) => setOpenAtLogin(item.checked)
+    },
+    { type: 'separator' },
+    { label: 'Quit', click: () => { app.isQuitting = true; app.quit(); } }
+  ];
+  tray.setContextMenu(Menu.buildFromTemplate(template));
+}
+
+function createTray() {
+  const trayPath = path.join(__dirname, '..', 'assets', 'tray.png');
+  let image;
+  try {
+    image = nativeImage.createFromPath(trayPath);
+    if (image.isEmpty()) throw new Error('tray.png decoded to empty image');
+  } catch (err) {
+    console.warn('[tray] failed to load icon:', err.message);
+    image = nativeImage.createEmpty();
+  }
+  tray = new Tray(image);
+  tray.setToolTip('Plan Usage Meter');
+  tray.on('click', debounce(toggleWindow, 250));
+  rebuildTrayMenu();
 }
 
 function broadcastUsage(usage) {
@@ -142,9 +213,13 @@ async function poll() {
   pollInFlight = true;
   try {
     const usage = await runWithTimeout(getAccountUsage, 15_000);
+    if (app.isQuitting) return;
     latestUsage = usage;
     broadcastUsage(usage);
-    // M4 adds: rebuildTrayMenu(); tray.setToolTip(buildTooltip(usage));
+    if (tray && !tray.isDestroyed()) {
+      tray.setToolTip(buildTooltip(usage));
+      rebuildTrayMenu();
+    }
   } catch (err) {
     console.error('[poll] unexpected', err);
   } finally {
@@ -161,7 +236,18 @@ app.on('second-instance', () => {
 });
 
 app.whenReady().then(() => {
+  loadSettings();
   createWindow();
+  createTray();
+  try {
+    app.setLoginItemSettings({
+      openAtLogin: !!settings.openAtLogin,
+      openAsHidden: true,
+      args: settings.openAtLogin ? ['--hidden'] : []
+    });
+  } catch (err) {
+    console.warn('[setLoginItemSettings] init failed:', err.message);
+  }
 
   ipcMain.handle(CH.USAGE_REFRESH, () => {
     if (pollInFlight) return { accepted: false };
@@ -191,8 +277,10 @@ app.on('before-quit', () => {
   if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
   if (saveStateTimer) { clearTimeout(saveStateTimer); saveStateTimer = null; }
   saveWindowState();
+  if (tray && !tray.isDestroyed()) { tray.destroy(); tray = null; }
 });
 
 app.on('window-all-closed', () => {
-  // Tray takes over in M4. For M2, hide-not-quit is wired via win.on('close').
+  // Tray-only presence: never quit on window close.
+  // Process exits only via the tray "Quit" menu (sets app.isQuitting and calls app.quit()).
 });
