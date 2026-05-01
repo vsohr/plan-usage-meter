@@ -4,11 +4,11 @@
 
 ## Status
 
-- **Phase:** M4 complete
+- **Phase:** M5 complete — ready for QA verification
 - **Iteration:** 1 of 5
 - **Worktree:** `c:/git/plan-usage-meter/worktrees/initial-scaffold/`
 - **Branch:** `feat/initial-scaffold`
-- **Plan documents:** `docs/team/SPEC.md`, `docs/team/ARCHITECTURE.md`, `docs/team/TASKS.md` (this file's sibling)
+- **Plan documents:** `docs/team/SPEC.md`, `docs/team/ARCHITECTURE.md`, `docs/team/TASKS.md`
 
 ## Milestone status
 
@@ -18,104 +18,74 @@
 | M2 | Polling & IPC | 6 | **complete (2026-05-01)** |
 | M3 | Renderer cards & relative time | 5 | **complete (2026-05-01)** |
 | M4 | Tray, persistence, edge cases | 8 | **complete (2026-05-01)** |
-| M5 | Tests, build, README, polish | 7 | pending |
+| M5 | Tests, build, README, polish | 7 | **complete (2026-05-01)** |
 
 ### M1 complete — 2026-05-01
 
-Scaffold + verbatim detection bridge + asset placeholders + electron-builder config. AC1, AC22 (build-time icon check). Detection module at `src/usage/index.js` is a verbatim copy of `c:/claude-portal/lib/codex-usage.js` — do not edit. Total project tasks: 38 (S/M only).
+Scaffold + verbatim detection bridge + asset placeholders + electron-builder config. AC1, AC22 (build-time icon check). Detection module at `src/usage/index.js` is a verbatim copy of `c:/claude-portal/lib/codex-usage.js` — do not edit.
 
-**Harness gotcha:** shell exports `ELECTRON_RUN_AS_NODE=1`, which forces `electron.exe` to run as plain Node. Unset it before `npm start`. Symptom: `Cannot read properties of undefined (reading 'requestSingleInstanceLock')`.
+**Harness gotcha:** shell exports `ELECTRON_RUN_AS_NODE=1`. Unset before `npm start`.
 
 ### M2 complete — 2026-05-01
 
-Polling + IPC. Created `src/main-lib.js` (pure helpers: `CH`, `runWithTimeout`, `buildTimeoutPayload`, `buildErrorPayload`, `readJsonSafe`, `writeJsonAtomic`, `clampToDisplay`, `buildTooltip`). `src/main.js` polling loop with `pollInFlight` serialisation + `latestUsage` cache + 5 IPC handlers. Preload exposes frozen `window.api`. Channel-name strings duplicated between main-lib and preload per sandbox boundary rule. Satisfies AC4, AC9 (wrapper side), AC16 (interval clear), AC19, AC23 (partial).
+Polling + IPC. `src/main-lib.js` (CH, runWithTimeout, payload builders, persistence helpers, clampToDisplay, buildTooltip). Polling loop with serialisation + latestUsage cache + 5 IPC handlers. AC4, AC9 (wrapper), AC16, AC19, AC23 (partial).
 
 ### M3 complete — 2026-05-01
 
-Renderer cards + relative time. Created `src/renderer/lib.js` (pure: `thresholdClass`, `clampPercent`, `formatResetIn`; `module.exports` guarded by `typeof module` so the file works as both `<script>` and `require` target). Renderer rewrites `styles.css` (dark theme, color thresholds, drag region, spin keyframe) + `renderer.js` (rAF-batched `replaceChildren` for atomic swap, refresh-spinner state, height reporting with `+1px` guard). AC2, AC3, AC11 (renderer side), AC12, AC18, AC24.
-
-**Visual smoke gotcha:** GDI `CopyFromScreen` returns transparent for `transparent: true` BrowserWindows on Win11. `PrintWindow` with `PW_RENDERFULLCONTENT=2` is the working capture path.
+`src/renderer/lib.js` pure helpers (thresholdClass, clampPercent, formatResetIn). Renderer rewrite: dark theme, drag region, rAF-batched DOM swap, height reporting with +1 px guard. AC2, AC3, AC11 (renderer), AC12, AC18, AC24.
 
 ### M4 complete — 2026-05-01
 
-**Files modified:**
-- `src/main.js` (286 lines, budget 350) — extended `electron` require with `Tray, Menu, nativeImage`; added `main-lib` imports for `readJsonSafe`, `writeJsonAtomic`, `buildTooltip`. Added `loadSettings`/`saveSettings`/`loadWindowState`/`saveWindowState`/`scheduleWindowStateSave` (debounced 500ms, skipped while window hidden). `createWindow` now reads saved state, runs `clampToDisplay` against the matching display, falls back to `defaultBottomRight` if saved coords are off-screen (AC13). Added `tray`, `debounce`, `toggleWindow`, `setOpenAtLogin`, `rebuildTrayMenu`, `createTray`. Tray click is debounced 250ms (AC15). `poll()` updates tooltip + rebuilds menu on every tick. `whenReady` calls `loadSettings`/`createWindow`/`createTray` then re-asserts `setLoginItemSettings` from persisted intent. `before-quit` clears timers, saves window state once more, destroys tray.
+Tray + persistence + edge cases. Settings/window-state load/save (debounced 500 ms, skipped while hidden). Window-state restore via `clampToDisplay` + off-screen fallback. Tray with debounced single-click toggle, 4-item menu, login-item re-assertion on launch. AC5, AC6, AC7, AC10, AC11, AC13, AC14, AC15, AC16, AC17, AC20, AC21, AC23.
 
-**Commits (3 atomic, T4–T7 verification-only):** `M4.T1` (persistence helpers), `M4.T2` (window-state restore + off-screen fallback), `M4.T3` (tray + login-item).
+### M5 complete — 2026-05-01
 
-**Verification:**
-- Helpers smoke (Node, no Electron): `readJsonSafe` on missing file → defaults; on malformed JSON → `console.warn` + defaults (no clobber); `writeJsonAtomic` then re-read round-trips. AC17 confirmed via direct helper invocation.
-- `clampToDisplay` smoke: null → null; inside → identity; `{x:99999,y:99999}` → null; `{x:-9999,y:-9999}` → null. AC13 fallback path proven.
-- `electron.exe .` boot: stdout empty, stderr only Chromium SIGTERM teardown noise (network service / GPU exit_code=143 from `timeout`-kill, not from our JS). No `unhandledRejection`, no `[poll] unexpected`. AC23 happy-path clean.
-- Window movement / drag and visual tray verification deferred to QA (M5.T7) — same Electron-on-headless-bash limitation as M2/M3.
+**Tests (47 total, 2 files):**
+- `tests/main-lib.test.js` — CH constants, clampToDisplay (12), runWithTimeout (3), buildTimeout/Error payloads (3), buildTooltip (5), readJsonSafe / writeJsonAtomic (5).
+- `tests/renderer-lib.test.js` — thresholdClass (5), clampPercent (2), formatResetIn (12 incl. day-grain polish).
+- `npm test`: `# pass 47  # fail 0`. Test glob updated to `tests/*.test.js` for Node 24 compatibility.
 
-**ACs satisfied:**
-- AC5 (close-to-tray): `win.on('close')` `e.preventDefault()` + `win.hide()` when `!app.isQuitting`. `Quit` menu sets `app.isQuitting = true` then `app.quit()`.
-- AC6 (tooltip): `tray.setToolTip(buildTooltip(usage))` on every poll.
-- AC7 (persistence path): settings.json written on toggle; `setLoginItemSettings` re-asserted on every launch from persisted intent. Reboot persistence is QA-time only, manual.
-- AC10 (single-instance): unchanged from M1; tray makes `second-instance` re-show effective.
-- AC11 (zero credentials): `buildTooltip` returns `'No providers detected'` when no provider is `available`.
-- AC13 (off-screen recovery): saved coords checked via `getDisplayMatching` + `clampToDisplay`; null result → `defaultBottomRight`.
-- AC14 (single display): code uses `getAllDisplays`-equivalent semantics via `getDisplayMatching`; no assumption of secondary display.
-- AC15 (tray-click debounce): `debounce(toggleWindow, 250)` on `'click'`.
-- AC16 (quit during in-flight poll): `before-quit` clears `pollTimer`; `poll()` re-checks `app.isQuitting` after the awaited `runWithTimeout` and short-circuits before mutating state. No `await poll()` anywhere — fire-and-forget.
-- AC17 (deleted/malformed settings.json): `readJsonSafe` defaults silently on ENOENT, warns + defaults on parse error. Fresh write on first toggle.
-- AC20 (non-default %USERPROFILE%): unchanged — `app.getPath('userData')` is Electron-managed; credential paths come from the verbatim detection module.
-- AC21 (DPI scaling): `clampToDisplay` uses `display.workArea` (logical pixels). Electron returns DIPs at any scale, so no math change needed.
-- AC23 (happy-path clean): boot smoke captured zero stdout/stderr from JS.
+**`formatResetIn` polish (NEW):** for resets ≥24 h away the helper now returns `resets in 5d` or `resets in 5d 3h` instead of `resets in 118h 22m`. Edited `src/renderer/lib.js`. Tests cover boundary cases: <24 h still uses h+m, exact 24 h boundary uses days, leftover hours append.
 
-**Out of scope for this subagent (flagged for QA):**
-- AC7 across-reboot: full Windows reboot required to verify `openAtLogin` actually launches the app on next boot. Manual M5.T7 step.
-- AC15 visual idempotence: requires interactive tray clicks. Manual M5.T7.
-- AC16 1-second-quit deadline: requires injecting a temporary delay into `getAccountUsage` and observing process exit. M4.T4 documents the manual experiment (verbatim policy: do not commit the injected delay).
+**Build (`npm run dist`):**
+- Outputs: `dist/Plan Usage Meter-0.1.0-x64.exe` (NSIS, 95 MB) + `dist/Plan Usage Meter-0.1.0-portable.exe` (95 MB).
+- `appId: com.vsohr.plan-usage-meter`, `productName: Plan Usage Meter`, both confirmed in `electron-builder.yml`.
+- **Build hiccup resolved:** electron-builder's bundled 7zip 21.07 cannot extract winCodeSign-2.6.0.7z's macOS dylib symlinks on Windows without Developer Mode or admin (`-snld` flag is silently ignored on this 7zip version). Added `signAndEditExecutable: false` to `electron-builder.yml` win block — signing is already out of scope (R6 / unsigned builds), and SmartScreen workaround is documented in README. Build now completes in one pass.
 
-**Notes / surprises:**
-- Plan deviation: I added `win.on('show', rebuildTrayMenu)` and `win.on('hide', rebuildTrayMenu)`. Without those, the tray menu's first item would say "Hide" forever (until next poll forces a rebuild). Cheap; keeps the menu in sync with reality.
-- Plan deviation: `saveWindowState` skips when `!win.isVisible()`. During close-to-tray Electron may fire `move` events as the window slides off-screen; we don't want to persist those phantom positions. The last legitimate move/resize already triggered a 500ms debounced write before the close, so no data is lost.
-- `Tray.isDestroyed()` is guarded everywhere to avoid throwing on the post-quit code path (in case `before-quit` and a late `poll()` race).
-- Final main.js is 286 lines, comfortably under the 350-line cap.
+**Prebuild loud-fail (AC22):** verified by renaming `assets/icon.ico` aside and running `npm run prebuild` → exits 1 with clear error message; restored file → succeeds.
 
-## Current task
+**README:** full rewrite at `README.md` (112 lines). Sections: Prerequisites, Install, Where credentials are read, Tray menu, Build, Testing, Troubleshooting (incl. SmartScreen, ELECTRON_RUN_AS_NODE, off-screen window), Repository layout, What's not in scope (v1), License.
 
-- None — M4 done. Awaiting M5 kick-off (tests + build + README + AC walkthrough).
+## Ready for verification
 
-## Next steps
+Final QA gate is the AC1–AC24 walkthrough in `TASKS.md` § M5.T7. Items requiring manual / interactive verification:
 
-1. M5: `node:test` for color thresholds, relative time, clamp bounds; `npm run dist` (NSIS + portable); README rewrite; full AC1–AC24 walkthrough including manual reboot for AC7.
+- AC2, AC3, AC4, AC5, AC6 — visual confirmation of cards / tray menu / refresh.
+- AC7 — full Windows reboot to confirm `openAtLogin` actually launches into the tray.
+- AC9 — disconnect + reconnect network mid-poll.
+- AC10 — second-instance focus (run `npm start` twice).
+- AC15 — rapid tray clicks settle correctly.
+- AC16 — quit during in-flight poll exits within 1 s (requires temp delay injection per M4.T4).
+- AC23 — DevTools console + main stdout zero-error walk through full lifecycle.
+- AC24 — visual no-flicker on auto-resize.
+
+Automated coverage (npm test + prebuild loud-fail + npm run dist) handles AC1, AC8, AC13/14 (test-side), AC17 (test-side), AC18 (test-side), AC22.
 
 ## Decisions log
 
-*(empty — populate as the build progresses)*
-
 | Date | Decision | Rationale |
 |---|---|---|
-| | | |
+| 2026-05-01 | `formatResetIn` switches to day-grain at ≥24 h | Long h-counts (e.g. `118h 22m`) are unreadable; days+hours scans cleanly |
+| 2026-05-01 | `signAndEditExecutable: false` in electron-builder.yml | Bundled 7zip 21.07 cannot extract winCodeSign symlinks on Windows without Developer Mode; signing is out of scope for v1 (R6) |
 
-## Open risks (carried from ARCHITECTURE.md §"Risks & Mitigations")
+## Open risks (carried from ARCHITECTURE.md)
 
-- **R1 — Native fetch under Electron's Node.** Electron 28 ships Node 18.18.2 (stable `fetch`, `AbortController`, `AbortSignal`). Lock `"electron": "^28.0.0"`; document the floor in README.
-- **R2 — electron-builder ICO requirements.** Builder rejects ICOs whose largest layer is below 256×256. Mitigation: commit a multi-size ICO with a 256 layer; `scripts/check-icons.js` runs on `prebuild` to fail loudly if the file goes missing. AC22's loud-failure is the default behavior.
-- **R3 — Windows tray DPI scaling.** A 16×16 PNG can look fuzzy at 150%/200% scaling. Out of scope per SPEC AC21. Future: ship a `@2x` variant if needed.
-- **R4 — Anthropic API rate-limit collisions.** Widget + claude-portal + Claude CLI all polling `api.anthropic.com/api/oauth/usage` may trip 429s. README warns "don't co-run with claude-portal's embedded usage meter." Errors flow into `provider.message` cleanly (AC12). Future: shared on-disk cache keyed by token hash, 30s TTL.
-- **R5 — Preload sandbox + `require`.** With `sandbox: true`, Node built-ins are unavailable in preload. Mitigation: preload uses only `electron`'s `contextBridge` and `ipcRenderer`. Channel constants are duplicated (not imported from `main-lib.js`) to keep preload pure-electron.
-- **R6 — Unsigned builds + SmartScreen.** SmartScreen blocks unsigned `.exe` files on first run. Mitigation: README documents the workaround ("More info → Run anyway"). Code signing is FUTURE.md (requires a paid certificate).
+- **R1–R6** unchanged from M4. R6 (SmartScreen / unsigned builds) explicitly accepted; README documents the "Run anyway" workaround.
 
-## Verification cadence
+## Notes for the verifier
 
-- After every milestone: `npm start` smoke + `git log --oneline -1`.
-- After M5: full AC1–AC24 walkthrough (table in `TASKS.md` § M5.T7).
-
-## Notes for the builder
-
-- The detection module at `src/usage/index.js` is a **verbatim copy** of `c:/claude-portal/lib/codex-usage.js`. Do not edit it. Any timeout / abort logic lives in `runWithTimeout` (in `src/main-lib.js`).
-- Preload is sandboxed — only `electron` may be `require`d. Channel-name strings are intentionally duplicated between `src/main-lib.js` and `src/preload.js`.
-- File budgets (CLAUDE.md): `src/main.js` ≤350 lines, `src/preload.js` ≤50, `src/renderer/renderer.js` ≤300, `src/renderer/styles.css` ≤250. Split into `src/main-lib.js` if `main.js` approaches the cap.
-- Frequent commits encouraged. Five milestone commits is the floor; smaller commits within each milestone welcome.
-- All work happens in the worktree at `worktrees/initial-scaffold/`. Do not edit the master working tree.
-
-## Concerns flagged for the team lead
-
-- **Asset placeholders (M1.T7).** `npm install` cannot pull in `sharp` (native module) per AC1. The plan calls for a hand-crafted multi-size ICO committed with the initial scaffold. If the team lead prefers a procedural placeholder, a dev-only generator script can be added — but the ICO must still be checked in and AC22's "fail loudly when icon.ico missing" must remain.
-- **Manual edge-case tests (M4.T4, M4.T5, M4.T6).** AC16/AC18/AC19 require briefly editing `src/usage/index.js` to inject a delay or throw. The plan explicitly says "DO NOT COMMIT" — the verbatim policy is binding. If the team would prefer an automated harness, that's an M2-side wrapper test that mocks `getAccountUsage`; deferred to FUTURE.md per scope.
-- **Open at login full verification requires a Windows reboot (AC7).** This is unavoidable on a real machine. CI cannot prove it; the M5.T7 walkthrough table flags it as a manual step.
-- **Unsigned `.exe` and SmartScreen (R6).** Documented in README. If the team has a certificate, the `electron-builder.yml` `win` block needs a `certificateFile` / `certificatePassword` pair — a 2-line addition that's out of v1 scope but trivial to bolt on.
+- Detection module at `src/usage/index.js` is a **verbatim copy** — do not edit.
+- File budgets respected: `main.js` 287, `main-lib.js` 113, `preload.js` 24, `renderer.js` 159, `styles.css` ≤250, `usage/index.js` untouched.
+- All edits live in worktree `worktrees/initial-scaffold/`. Master untouched.
+- To repeat the build: clear `dist/` first; `npm run dist` runs ~30 s after node_modules is warm.
+- To rerun tests: `npm test` (47 tests, ~300 ms).
