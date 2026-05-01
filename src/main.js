@@ -1,25 +1,24 @@
 'use strict';
 
 const path = require('path');
-const { app, BrowserWindow, screen } = require('electron');
+const { app, BrowserWindow, ipcMain, screen } = require('electron');
 
 const { getAccountUsage } = require('./usage');
+const { CH, runWithTimeout, clampToDisplay } = require('./main-lib');
 
-// --- Single-instance lock (AC10) ---
 if (!app.requestSingleInstanceLock()) {
   app.quit();
   return;
 }
 
-// --- Last-resort error backstops (AC23) ---
-process.on('unhandledRejection', (reason) => {
-  console.error('[unhandledRejection]', reason);
-});
-process.on('uncaughtException', (err) => {
-  console.error('[uncaughtException]', err);
-});
+process.on('unhandledRejection', (reason) => console.error('[unhandledRejection]', reason));
+process.on('uncaughtException', (err)    => console.error('[uncaughtException]', err));
 
 let win = null;
+let pollInFlight = false;
+let pollTimer = null;
+let latestUsage = null;
+let resizeTimer = null;
 
 function defaultBottomRight(work) {
   const margin = 16;
@@ -55,9 +54,38 @@ function createWindow() {
     }
   });
   win.loadFile(path.join(__dirname, 'renderer', 'index.html'));
+  if (process.env.PUM_DEVTOOLS === '1') win.webContents.openDevTools({ mode: 'detach' });
   win.once('ready-to-show', () => {
     if (!process.argv.includes('--hidden')) win.show();
+    if (latestUsage) win.webContents.send(CH.USAGE_UPDATE, latestUsage);
   });
+  win.on('close', (e) => {
+    if (app.isQuitting) return;
+    e.preventDefault();
+    win.hide();
+  });
+}
+
+function broadcastUsage(usage) {
+  for (const w of BrowserWindow.getAllWindows()) {
+    if (!w.isDestroyed()) w.webContents.send(CH.USAGE_UPDATE, usage);
+  }
+}
+
+async function poll() {
+  if (pollInFlight) return;
+  if (app.isQuitting) return;
+  pollInFlight = true;
+  try {
+    const usage = await runWithTimeout(getAccountUsage, 15_000);
+    latestUsage = usage;
+    broadcastUsage(usage);
+    // M4 adds: rebuildTrayMenu(); tray.setToolTip(buildTooltip(usage));
+  } catch (err) {
+    console.error('[poll] unexpected', err);
+  } finally {
+    pollInFlight = false;
+  }
 }
 
 app.on('second-instance', () => {
@@ -68,23 +96,39 @@ app.on('second-instance', () => {
   }
 });
 
-app.whenReady().then(async () => {
+app.whenReady().then(() => {
   createWindow();
-  // M1 sanity poll — proves the detection bridge works end-to-end.
-  // M2 replaces this with the timer + IPC broadcast.
-  try {
-    const usage = await getAccountUsage();
-    console.log('[poll:M1] %s', JSON.stringify({
-      available: usage.available,
-      providers: Object.keys(usage.providers || {}),
-      label: usage.label
-    }));
-  } catch (err) {
-    console.error('[poll:M1] failed', err);
-  }
+
+  ipcMain.handle(CH.USAGE_REFRESH, () => {
+    if (pollInFlight) return { accepted: false };
+    poll();
+    return { accepted: true };
+  });
+  ipcMain.on(CH.WIN_HIDE,  () => { if (win) win.hide(); });
+  ipcMain.on(CH.APP_QUIT,  () => { app.isQuitting = true; app.quit(); });
+  ipcMain.on(CH.WIN_HEIGHT, (_e, raw) => {
+    const px = Math.max(80, Math.min(1200, Math.round(Number(raw) || 0)));
+    if (resizeTimer) return;
+    resizeTimer = setTimeout(() => {
+      resizeTimer = null;
+      if (!win || win.isDestroyed()) return;
+      const cur = win.getBounds();
+      const newY = cur.y + (cur.height - px);
+      win.setBounds({ x: cur.x, y: newY, width: 340, height: px }, false);
+    }, 16);
+  });
+
+  poll();
+  pollTimer = setInterval(poll, 60_000);
+});
+
+app.on('before-quit', () => {
+  app.isQuitting = true;
+  if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
 });
 
 app.on('window-all-closed', () => {
-  // Tray takes over in M4 — for M1, quitting on last-window-close is fine.
-  app.quit();
+  // Tray takes over in M4. For M2, hide-not-quit is wired via win.on('close').
 });
+
+void clampToDisplay; // M4 wires this.
