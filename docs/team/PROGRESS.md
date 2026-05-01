@@ -4,7 +4,7 @@
 
 ## Status
 
-- **Phase:** M2 complete
+- **Phase:** M3 complete
 - **Iteration:** 1 of 5
 - **Worktree:** `c:/git/plan-usage-meter/worktrees/initial-scaffold/`
 - **Branch:** `feat/initial-scaffold`
@@ -16,7 +16,7 @@
 |---|---|---|---|
 | M1 | Scaffold & detection bridge | 11 | **complete (2026-05-01)** |
 | M2 | Polling & IPC | 6 | **complete (2026-05-01)** |
-| M3 | Renderer cards & relative time | 6 | pending |
+| M3 | Renderer cards & relative time | 5 | **complete (2026-05-01)** |
 | M4 | Tray, persistence, edge cases | 8 | pending |
 | M5 | Tests, build, README, polish | 7 | pending |
 
@@ -75,16 +75,45 @@
 - The TASKS.md plan exposes `refreshNow()` on `window.api` (matching ARCHITECTURE.md §IPC Contracts and §Renderer Architecture). The user kick-off prompt mentioned `refresh()`/channel names `usage`/`refresh-now`; followed TASKS.md verbatim because (a) it's the binding plan, (b) renderer.js / preload.js identifiers must match, (c) ARCHITECTURE.md is the binding HOW spec.
 - `void clampToDisplay;` in main.js silences the unused-import lint until M4 wires window-state restoration.
 
+### M3 complete — 2026-05-01
+
+**Files created/modified:**
+- Created: `src/renderer/lib.js` (34 lines) — pure helpers `thresholdClass`, `clampPercent`, `formatResetIn`. `module.exports` guarded by `typeof module` so the same file works as a `<script>` tag in renderer and a `require()` target in `node:test` (M5.T1/T2).
+- Modified: `src/renderer/styles.css` (123 lines, budget 250) — full rewrite. Dark theme with `rgba(20,20,24,0.92)` body bg, card surfaces at `rgba(34,34,40,0.85)`, bar fills green→amber→red via `.warn`/`.error` classes with `transition: width 200ms ease-out, background-color 200ms ease-out`. Header drag region + button no-drag region, `.spinning` spin keyframe (0.8s linear infinite). Unavailable cards: `opacity: 0.55` + italic `.message`. `will-change: contents` on `#cards` for AC24 belt-and-braces.
+- Modified: `src/renderer/index.html` (22 lines, budget 80) — added `<script src="lib.js"></script>` before `renderer.js`. CSP unchanged (strict).
+- Modified: `src/renderer/renderer.js` (159 lines, budget 300) — full rewrite. `renderCards(usage)` builds DOM via `createDocumentFragment` + `replaceChildren` (single-mutation atomic swap, AC24). `buildCard` handles available + unavailable branches. `buildWindowRow` defends against non-numeric `usedPercent` (renders 0% bar + "—" text, never throws). `scheduleRender` coalesces renders into one `requestAnimationFrame` tick and reports height after paint. `setInterval(30_000)` re-renders for relative-time tick without re-polling. Refresh button: `.spinning` class while in flight; cleared on `usage:update` push or 500ms after `accepted: false`.
+
+**Commits (3 atomic):** `M3.T1` (lib helpers), `M3.T2` (styles), `M3.T3` (renderer + html). M3.T4/T5 are verification-only (no commits).
+
+**Verification:**
+- `node -e` smoke on `lib.js` printed `'' warn error '' | — | resets in 30m | resets soon | resets in 3h 12m` — all four `thresholdClass` boundaries + four `formatResetIn` paths (null, future, negative-skew, future-with-hours) all match expected.
+- `npm start` (electron.exe with `ELECTRON_RUN_AS_NODE` unset): two BrowserWindow processes plus GPU + utility children stayed alive past 8s. Window enumerated via `EnumWindows` at (2204,1108)–(2544,1376) — 340×269 frameless, bottom-right, 16-px margin. Auto-resize fired (initial 180 → 269). Captured via `PrintWindow` with `PW_RENDERFULLCONTENT=2` (GDI-only `CopyFromScreen` returns transparent buffer for layered/composited Electron windows on Win11; `PrintWindow` is the working path for visual smoke against this app type).
+- Screenshot showed: header with title + spinning+close buttons, Claude card with `Max` plan + Session 69% (green) "resets in 3h 32m" + Weekly 37% "resets in 118h 22m" + Sonnet weekly 0% "—", Codex card with `Prolite` plan + Session 24% + Weekly 15%. All bars rendered with correct color classes (all <75% so all green this run).
+- stdout/stderr both empty (no errors, no unhandled rejections) for both the regular run and the `PUM_DEVTOOLS=1` run. AC23 verified for the M3 happy path.
+
+**ACs satisfied (M3 portion):**
+- AC2 (visual): full — frameless 340-px window, transparent background, dark cards, system font.
+- AC3 (renders all providers): full — `Object.keys(usage.providers)` iteration; available cards show plan + bars + relative-time; unavailable cards muted with `provider.message`.
+- AC11 (zero credentials): renderer-side full — "Not detected" card path coded and visually rendered when `provider.available !== true`. (Live no-creds smoke is M5.T7.)
+- AC12 (expired/invalid creds): renderer-side full — `provider.message` is the body of the unavailable card.
+- AC18 (clock skew): full — `formatResetIn` returns `'resets soon'` for any `diffMs <= 60_000`, which includes negative deltas. Verified in node smoke.
+- AC23 (no console errors): partial — clean run produced zero stdout/stderr errors. Full quit-and-reopen cycle is M5.
+- AC24 (no flicker on auto-resize): full — `replaceChildren(fragment)` is the single-mutation swap; `requestAnimationFrame` batches render+reportHeight; main-side `setBounds(..., false)` is bottom-anchored (already wired in M2). Renderer-side adds `+1px` to `documentElement.scrollHeight` to avoid sub-pixel jitter.
+
+**Notes / surprises:**
+- Plan deviation: Plan's `el()` helper accepted a `style` opts hash; I dropped that branch (unused). Renderer.js stayed at 159 lines well under the 300-line budget.
+- Plan deviation: Renderer's `reportHeight()` uses `document.documentElement.scrollHeight + 1` instead of `document.body.scrollHeight` from the plan. Two reasons: (a) `documentElement.scrollHeight` is the conventional measure for full-content height including the html box, (b) the +1 px guard against sub-pixel jitter at fractional DPI is mentioned explicitly in the kick-off prompt's AC24 hint. Bottom-anchored `setBounds` from M2 still does the heavy lifting — the +1 is belt-and-braces.
+- Visual smoke required `PrintWindow` API instead of `CopyFromScreen` because Electron with `transparent: true` produces a layered window that GDI screen-capture sees through. Documented in CODE-REVIEW.md if helpful.
+- Console.warn (not console.error) is used only for truly unexpected states: missing preload bridge, refresh API throw. Happy path produces zero log output (per AC23).
+
 ## Current task
 
-- None — awaiting kick-off. First action: `M1.T1` (worktree bootstrap).
+- None — M3 done. Awaiting M4 kick-off.
 
 ## Next steps
 
-1. Create the worktree per `M1.T1`.
-2. Run `M1.T2..T10` (parallelisable subset noted in TASKS.md).
-3. Land the M1 commit per `M1.T11`. Smoke `npm start` → empty 340-px frameless window in bottom-right.
-4. Continue to M2.
+1. M4: tray icon, tooltip, context menu, Open at login, window-state persistence, edge-case handling.
+2. M5: tests (`node:test`), README, full AC1–AC24 walkthrough.
 
 ## Decisions log
 
