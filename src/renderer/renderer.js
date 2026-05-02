@@ -27,6 +27,20 @@ function el(tag, opts) {
   return node;
 }
 
+function providerIcon(name) {
+  const meta = providerIconMeta(name);
+  if (!meta) return null;
+  const SVG_NS = 'http://www.w3.org/2000/svg';
+  const span = el('span', { className: meta.className });
+  span.setAttribute('aria-hidden', 'true');
+  const svg = document.createElementNS(SVG_NS, 'svg');
+  const use = document.createElementNS(SVG_NS, 'use');
+  use.setAttribute('href', `#${meta.symbolId}`);
+  svg.appendChild(use);
+  span.appendChild(svg);
+  return span;
+}
+
 function buildWindowRow(w) {
   if (!w || typeof w.usedPercent !== 'number') return null;
   const pct = Math.round(clampPercent(w.usedPercent));
@@ -51,7 +65,11 @@ function buildCard(name, provider) {
   const display = PROVIDER_DISPLAY_NAMES[name] || name;
   const card = el('article', { className: 'card' });
   const head = el('div', { className: 'head' });
-  head.appendChild(el('span', { className: 'name', text: display }));
+  const title = el('span', { className: 'name' });
+  const icon = providerIcon(name);
+  if (icon) title.appendChild(icon);
+  title.appendChild(el('span', { text: display }));
+  head.appendChild(title);
 
   if (!provider || provider.available !== true) {
     card.classList.add('unavailable');

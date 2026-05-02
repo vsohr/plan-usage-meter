@@ -1,10 +1,28 @@
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert');
-const { thresholdClass, clampPercent, formatResetIn } = require('../src/renderer/lib');
+const { thresholdClass, clampPercent, formatResetIn, providerIconMeta } = require('../src/renderer/lib');
 
 const NOW = Date.parse('2026-05-01T12:00:00Z');
 const EM_DASH = '—';
+
+// --- providerIconMeta --------------------------------------------------------
+
+test('providerIconMeta: Claude and Codex use Claude Portal brand symbols', () => {
+  assert.deepStrictEqual(providerIconMeta('claude'), {
+    symbolId: 'brand-claude',
+    className: 'provider-icon icon-claude'
+  });
+  assert.deepStrictEqual(providerIconMeta('codex'), {
+    symbolId: 'brand-codex',
+    className: 'provider-icon icon-codex'
+  });
+});
+
+test('providerIconMeta: unknown providers do not render a brand icon', () => {
+  assert.strictEqual(providerIconMeta('hermes'), null);
+  assert.strictEqual(providerIconMeta('unknown'), null);
+});
 
 // --- thresholdClass ----------------------------------------------------------
 

@@ -38,6 +38,16 @@ function formatResetIn(isoString, now) {
   return `resets in ${hours}h ${rem}m`;
 }
 
+function providerIconMeta(providerName) {
+  if (providerName === 'claude') {
+    return { symbolId: 'brand-claude', className: 'provider-icon icon-claude' };
+  }
+  if (providerName === 'codex') {
+    return { symbolId: 'brand-codex', className: 'provider-icon icon-codex' };
+  }
+  return null;
+}
+
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { thresholdClass, clampPercent, formatResetIn };
+  module.exports = { thresholdClass, clampPercent, formatResetIn, providerIconMeta };
 }
