@@ -22,6 +22,7 @@ const {
   writeJsonAtomic,
   clampToDisplay,
   selectDefaultDisplay,
+  pinnedResizeBounds,
   buildTooltip
 } = require('../src/main-lib');
 
@@ -118,6 +119,18 @@ test('selectDefaultDisplay: falls back to primary when no display list exists', 
   const primary = { id: 1, workArea: { x: 0, y: 0, width: 1920, height: 1040 } };
   assert.strictEqual(selectDefaultDisplay([], primary), primary);
   assert.strictEqual(selectDefaultDisplay(null, primary), primary);
+});
+
+test('pinnedResizeBounds: ignores one-pixel resize jitter', () => {
+  assert.strictEqual(pinnedResizeBounds({ x: 10, y: 20, height: 300 }, 301), null);
+  assert.strictEqual(pinnedResizeBounds({ x: 10, y: 20, height: 300 }, 299), null);
+});
+
+test('pinnedResizeBounds: pins bottom edge for real height changes', () => {
+  assert.deepStrictEqual(
+    pinnedResizeBounds({ x: 10, y: 20, height: 300 }, 320),
+    { x: 10, y: 0, width: 340, height: 320 }
+  );
 });
 
 // --- runWithTimeout ----------------------------------------------------------

@@ -176,6 +176,18 @@ function selectDefaultDisplay(displays, primaryDisplay = null) {
     .sort((a, b) => (b.workArea.x + b.workArea.width) - (a.workArea.x + a.workArea.width))[0] || null;
 }
 
+function pinnedResizeBounds(currentBounds, nextHeight, tolerancePx = 1) {
+  if (!currentBounds || typeof currentBounds.height !== 'number') return null;
+  const height = Math.round(Number(nextHeight) || 0);
+  if (Math.abs(currentBounds.height - height) <= tolerancePx) return null;
+  return {
+    x: currentBounds.x,
+    y: currentBounds.y + (currentBounds.height - height),
+    width: 340,
+    height
+  };
+}
+
 function buildTooltip(usage) {
   const providers = (usage && usage.providers) || {};
   const avail = Object.values(providers).filter((p) => p && p.available);
@@ -200,5 +212,6 @@ module.exports = {
   writeJsonAtomic,
   clampToDisplay,
   selectDefaultDisplay,
+  pinnedResizeBounds,
   buildTooltip
 };

@@ -16,6 +16,7 @@ const {
   isProviderHttp429,
   clampToDisplay,
   selectDefaultDisplay,
+  pinnedResizeBounds,
   readJsonSafe,
   writeJsonAtomic,
   buildTooltip
@@ -352,8 +353,8 @@ app.whenReady().then(() => {
       resizeTimer = null;
       if (!win || win.isDestroyed()) return;
       const cur = win.getBounds();
-      const newY = cur.y + (cur.height - px);
-      win.setBounds({ x: cur.x, y: newY, width: 340, height: px }, false);
+      const next = pinnedResizeBounds(cur, px);
+      if (next) win.setBounds(next, false);
     }, 16);
   });
 
