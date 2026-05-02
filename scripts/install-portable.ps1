@@ -51,6 +51,15 @@ function Stop-ProcessByPath {
     }
 }
 
+function Stop-AppProcesses {
+  Get-Process -ErrorAction SilentlyContinue |
+    Where-Object { $_.ProcessName -eq $AppName -or $_.MainWindowTitle -eq $AppName } |
+    ForEach-Object {
+      Write-Host "Stopping $($_.ProcessName) ($($_.Id))"
+      Stop-Process -Id $_.Id -Force
+    }
+}
+
 function New-Shortcut {
   param(
     [string]$ShortcutPath,
@@ -70,6 +79,7 @@ function New-Shortcut {
 $SourceExe = Get-LatestPortableExe
 Write-Host "Installing $SourceExe"
 
+Stop-AppProcesses
 Stop-ProcessByPath $TargetExe
 Stop-ProcessByPath $DevElectron
 

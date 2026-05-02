@@ -22,4 +22,6 @@ test('portable install script installs, shortcuts, and relaunches the app', () =
   assert.match(script, /Desktop/);
   assert.match(script, /Start-Process/);
   assert.match(script, /Stop-Process/);
+  assert.match(script, /Plan Usage Meter/);
+  assert.match(script, /Stop-AppProcesses/);
 });
