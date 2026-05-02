@@ -56,7 +56,7 @@ Two JSON files in `app.getPath('userData')` (`%APPDATA%/Plan Usage Meter/`):
 ### Renderer details worth knowing
 
 - Provider order is locked to `['claude', 'codex']` first, then any other keys ([renderer.js](src/renderer/renderer.js)). Hermes-as-Codex-data shows up under the codex card.
-- Color thresholds in [src/renderer/lib.js](src/renderer/lib.js) `thresholdClass`: <75% none, ≥75% `warn` (amber), ≥95% `error` (red). Mirror this in CSS if changing.
+- Color thresholds in [src/renderer/lib.js](src/renderer/lib.js) `thresholdClass`: <65% none, ≥65% `warn` (amber), ≥85% `error` (red). Mirror this in CSS if changing.
 - Relative-time formatting in [lib.js](src/renderer/lib.js) `formatResetIn` switches to day-grain (`5d`, `5d 3h`) once `≥24h` to avoid unreadable hour counts. Re-rendered every 30s without re-polling providers.
 
 ## Constraints (from SPEC, still binding)

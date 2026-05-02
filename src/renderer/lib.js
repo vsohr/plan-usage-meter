@@ -3,8 +3,8 @@
 function thresholdClass(usedPercent) {
   if (typeof usedPercent !== 'number' || Number.isNaN(usedPercent)) return '';
   if (usedPercent < 0) return '';
-  if (usedPercent >= 95) return 'error';
-  if (usedPercent >= 75) return 'warn';
+  if (usedPercent >= 85) return 'error';
+  if (usedPercent >= 65) return 'warn';
   return '';
 }
 

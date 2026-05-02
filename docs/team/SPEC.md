@@ -44,7 +44,7 @@ Power users (developers) who use multiple LLM coding tools simultaneously and wa
 
 #### Behavior
 - Available card shows: provider name, plan type, primary window (label, %, bar, resets-in), secondary window (same), and any `details` entries (e.g. Opus weekly, Sonnet weekly).
-- Bar color thresholds: green <75%, amber 75–95%, red ≥95%.
+- Bar color thresholds: green <65%, amber 65–85%, red ≥85%.
 - Unavailable card shows: provider name (muted), "Not detected", and `provider.message` underneath.
 - Relative-time strings ("resets in 3h 12m") refresh every 30 seconds in the renderer without re-polling the providers.
 

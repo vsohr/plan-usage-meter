@@ -32,20 +32,20 @@ test('providerIconMeta: unknown providers do not render a brand icon', () => {
 
 // --- thresholdClass ----------------------------------------------------------
 
-test('thresholdClass: <75 returns ok (empty)', () => {
+test('thresholdClass: <65 returns ok (empty)', () => {
   assert.strictEqual(thresholdClass(0), '');
   assert.strictEqual(thresholdClass(50), '');
-  assert.strictEqual(thresholdClass(74.9), '');
+  assert.strictEqual(thresholdClass(64.9), '');
 });
 
-test('thresholdClass: 75..95 returns warn', () => {
+test('thresholdClass: 65..85 returns warn', () => {
+  assert.strictEqual(thresholdClass(65), 'warn');
   assert.strictEqual(thresholdClass(75), 'warn');
-  assert.strictEqual(thresholdClass(85), 'warn');
-  assert.strictEqual(thresholdClass(94.9), 'warn');
+  assert.strictEqual(thresholdClass(84.9), 'warn');
 });
 
-test('thresholdClass: >=95 returns error (crit)', () => {
-  assert.strictEqual(thresholdClass(95), 'error');
+test('thresholdClass: >=85 returns error (crit)', () => {
+  assert.strictEqual(thresholdClass(85), 'error');
   assert.strictEqual(thresholdClass(100), 'error');
   assert.strictEqual(thresholdClass(150), 'error');
 });

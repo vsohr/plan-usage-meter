@@ -45,7 +45,7 @@
 
 ### AC3 — Renders all providers
 - **Status:** INSPECTED-PASS (manual walkthrough required)
-- **Evidence:** `src/renderer/renderer.js:13-20` defines `PROVIDER_ORDER = ['claude','codex']` and `providerOrderedKeys()` iterates `Object.keys(usage.providers)` so every key is rendered (preserving order). `buildCard()` at lines 50-74 branches on `provider.available !== true` → renders muted `Not detected` card with `provider.message`; otherwise renders plan, primary/secondary windows, and `(provider.details||[])`. Threshold colors applied via `thresholdClass` (75/95 boundaries — verified by 5 unit tests).
+- **Evidence:** `src/renderer/renderer.js:13-20` defines `PROVIDER_ORDER = ['claude','codex']` and `providerOrderedKeys()` iterates `Object.keys(usage.providers)` so every key is rendered (preserving order). `buildCard()` at lines 50-74 branches on `provider.available !== true` → renders muted `Not detected` card with `provider.message`; otherwise renders plan, primary/secondary windows, and `(provider.details||[])`. Threshold colors applied via `thresholdClass` (65/85 boundaries — verified by 5 unit tests).
 - **Manual walkthrough:** with valid Claude+Codex creds, run `npm start` → both cards visible with plan label, percentages, bar colors and `resets in …` strings. Move `~/.codex/auth.json` aside → next poll shows Codex card flipped to muted "Not detected" with credentials-path message; Claude card unchanged.
 
 ### AC4 — Polling and manual refresh
