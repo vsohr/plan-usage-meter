@@ -12,6 +12,8 @@ $RepoRoot = Resolve-Path (Join-Path $ScriptDir '..')
 $DistDir = Join-Path $RepoRoot 'dist'
 $AppName = 'Plan Usage Meter'
 $TargetExe = Join-Path $InstallDir "$AppName.exe"
+$TargetIcon = Join-Path $InstallDir "$AppName.ico"
+$SourceIcon = Join-Path $RepoRoot 'assets\icon.ico'
 $DevElectron = Join-Path $RepoRoot 'node_modules\electron\dist\electron.exe'
 
 function Get-LatestPortableExe {
@@ -47,7 +49,7 @@ function Stop-ProcessByPath {
     } |
     ForEach-Object {
       Write-Host "Stopping $($_.ProcessName) ($($_.Id))"
-      Stop-Process -Id $_.Id -Force
+      Stop-Process -Id $_.Id -Force -ErrorAction SilentlyContinue
     }
 }
 
@@ -64,16 +66,24 @@ function New-Shortcut {
   param(
     [string]$ShortcutPath,
     [string]$ExecutablePath,
-    [string]$WorkingDirectory
+    [string]$WorkingDirectory,
+    [string]$IconPath
   )
 
   $shell = New-Object -ComObject WScript.Shell
   $shortcut = $shell.CreateShortcut($ShortcutPath)
   $shortcut.TargetPath = $ExecutablePath
   $shortcut.WorkingDirectory = $WorkingDirectory
-  $shortcut.IconLocation = "$ExecutablePath,0"
+  $shortcut.IconLocation = $IconPath
   $shortcut.Description = $AppName
   $shortcut.Save()
+}
+
+function Refresh-ShellIcons {
+  $ie4uinit = Join-Path $env:WINDIR 'System32\ie4uinit.exe'
+  if (Test-Path -LiteralPath $ie4uinit) {
+    Start-Process -FilePath $ie4uinit -ArgumentList '-show' -WindowStyle Hidden -Wait
+  }
 }
 
 $SourceExe = Get-LatestPortableExe
@@ -85,18 +95,21 @@ Stop-ProcessByPath $DevElectron
 
 New-Item -ItemType Directory -Force -Path $InstallDir | Out-Null
 Copy-Item -LiteralPath $SourceExe -Destination $TargetExe -Force
+Copy-Item -LiteralPath $SourceIcon -Destination $TargetIcon -Force
 
 $Desktop = [Environment]::GetFolderPath('Desktop')
 $DesktopShortcut = Join-Path $Desktop "$AppName.lnk"
-New-Shortcut -ShortcutPath $DesktopShortcut -ExecutablePath $TargetExe -WorkingDirectory $InstallDir
+New-Shortcut -ShortcutPath $DesktopShortcut -ExecutablePath $TargetExe -WorkingDirectory $InstallDir -IconPath $TargetIcon
 Write-Host "Desktop shortcut: $DesktopShortcut"
 
 if ($StartupShortcut) {
   $Startup = [Environment]::GetFolderPath('Startup')
   $StartupLink = Join-Path $Startup "$AppName.lnk"
-  New-Shortcut -ShortcutPath $StartupLink -ExecutablePath $TargetExe -WorkingDirectory $InstallDir
+  New-Shortcut -ShortcutPath $StartupLink -ExecutablePath $TargetExe -WorkingDirectory $InstallDir -IconPath $TargetIcon
   Write-Host "Startup shortcut: $StartupLink"
 }
+
+Refresh-ShellIcons
 
 if (-not $NoLaunch) {
   Start-Process -FilePath $TargetExe -WorkingDirectory $InstallDir

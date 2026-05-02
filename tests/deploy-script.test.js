@@ -20,6 +20,8 @@ test('portable install script installs, shortcuts, and relaunches the app', () =
   assert.match(script, /Copy-Item/);
   assert.match(script, /CreateShortcut/);
   assert.match(script, /Desktop/);
+  assert.match(script, /\$TargetIcon = Join-Path \$InstallDir "\$AppName\.ico"/);
+  assert.match(script, /IconLocation/);
   assert.match(script, /Start-Process/);
   assert.match(script, /Stop-Process/);
   assert.match(script, /Plan Usage Meter/);
