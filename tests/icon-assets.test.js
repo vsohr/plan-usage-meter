@@ -18,6 +18,11 @@ function pngSize(buf) {
   };
 }
 
+function pngColorType(buf) {
+  assert.strictEqual(buf.toString('ascii', 1, 4), 'PNG');
+  return buf[25];
+}
+
 function icoEntries(buf) {
   assert.strictEqual(buf.readUInt16LE(0), 0);
   assert.strictEqual(buf.readUInt16LE(2), 1);
@@ -40,6 +45,7 @@ test('app icon source is a high-resolution generated PNG', () => {
   assert.strictEqual(size.width, size.height);
   assert.ok(size.width >= 1024);
   assert.ok(source.length > 100_000);
+  assert.strictEqual(pngColorType(source), 6, 'app-icon.png should include an alpha channel');
 });
 
 test('runtime and installer icons are derived from the generated artwork', () => {
