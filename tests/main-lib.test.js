@@ -126,6 +126,10 @@ test('pinnedResizeBounds: ignores one-pixel resize jitter', () => {
   assert.strictEqual(pinnedResizeBounds({ x: 10, y: 20, height: 300 }, 299), null);
 });
 
+test('pinnedResizeBounds: keeps the current height when content reports smaller', () => {
+  assert.strictEqual(pinnedResizeBounds({ x: 10, y: 20, height: 300 }, 240), null);
+});
+
 test('pinnedResizeBounds: pins bottom edge for real height changes', () => {
   assert.deepStrictEqual(
     pinnedResizeBounds({ x: 10, y: 20, height: 300 }, 320),

@@ -179,7 +179,7 @@ function selectDefaultDisplay(displays, primaryDisplay = null) {
 function pinnedResizeBounds(currentBounds, nextHeight, tolerancePx = 1) {
   if (!currentBounds || typeof currentBounds.height !== 'number') return null;
   const height = Math.round(Number(nextHeight) || 0);
-  if (Math.abs(currentBounds.height - height) <= tolerancePx) return null;
+  if (height <= currentBounds.height + tolerancePx) return null;
   return {
     x: currentBounds.x,
     y: currentBounds.y + (currentBounds.height - height),
