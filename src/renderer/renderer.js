@@ -117,6 +117,12 @@ function renderCards(usage) {
   root.replaceChildren(next);
 }
 
+function renderRefreshMeta(usage) {
+  const meta = document.getElementById('refresh-meta');
+  if (!meta) return;
+  meta.textContent = formatRefreshMeta(usage);
+}
+
 function reportHeight() {
   if (!window.api || typeof window.api.reportHeight !== 'function') return;
   // documentElement.scrollHeight tracks content height including the header.
@@ -129,6 +135,7 @@ function scheduleRender() {
   if (renderRaf) return;
   renderRaf = requestAnimationFrame(() => {
     renderRaf = null;
+    renderRefreshMeta(latestUsage);
     renderCards(latestUsage);
     reportHeight();
   });

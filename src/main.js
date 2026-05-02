@@ -3,16 +3,19 @@
 const path = require('path');
 const { app, BrowserWindow, ipcMain, screen, Tray, Menu, nativeImage } = require('electron');
 
-const { getAccountUsage, getCodexUsage } = require('./usage');
+const { getCodexUsage, fetchClaudeUsage } = require('./usage');
 const {
   CH,
+  AUTO_POLL_INTERVAL_MS,
+  PROVIDER_USAGE_CACHE_MS,
   runWithTimeout,
   buildAccountUsagePayload,
   buildUnavailableProvider,
   buildRateLimitedProvider,
+  isProviderCacheFresh,
   isProviderHttp429,
-  withProviderCooldown,
   clampToDisplay,
+  selectDefaultDisplay,
   readJsonSafe,
   writeJsonAtomic,
   buildTooltip
@@ -29,9 +32,12 @@ process.on('uncaughtException', (err)    => console.error('[uncaughtException]',
 let win = null;
 let pollInFlight = false;
 let pollTimer = null;
+let initialPollTimer = null;
 let latestUsage = null;
 let resizeTimer = null;
 let claudeRateLimitedUntil = 0;
+let codexUsageCache = null;
+let claudeUsageCache = null;
 
 const CLAUDE_RATE_LIMIT_BACKOFF_MS = 15 * 60_000;
 
@@ -91,7 +97,8 @@ function defaultBottomRight(work) {
 }
 
 function createWindow() {
-  const work = screen.getPrimaryDisplay().workArea;
+  const defaultDisplay = selectDefaultDisplay(screen.getAllDisplays(), screen.getPrimaryDisplay());
+  const work = defaultDisplay.workArea;
   const saved = loadWindowState();
   let bounds = null;
   if (saved && typeof saved.x === 'number' && typeof saved.y === 'number') {
@@ -128,6 +135,7 @@ function createWindow() {
   win.once('ready-to-show', () => {
     if (!process.argv.includes('--hidden')) win.show();
     if (latestUsage) win.webContents.send(CH.USAGE_UPDATE, latestUsage);
+    scheduleInitialPoll();
   });
   win.on('close', (e) => {
     if (app.isQuitting) return;
@@ -215,37 +223,69 @@ function broadcastUsage(usage) {
   }
 }
 
-async function getUsageDuringClaudeCooldown(nowMs = Date.now()) {
-  const providers = {
-    claude: buildRateLimitedProvider('claude', claudeRateLimitedUntil, nowMs)
-  };
-  const errors = {
-    claude: `HTTP 429 (rate limited until ${new Date(claudeRateLimitedUntil).toISOString()})`
-  };
-
-  try {
-    providers.codex = await getCodexUsage();
-  } catch (err) {
-    providers.codex = buildUnavailableProvider('codex', err.message || 'Codex usage unavailable');
-    errors.codex = err.message;
+async function getCodexProvider(nowMs) {
+  if (isProviderCacheFresh(codexUsageCache, PROVIDER_USAGE_CACHE_MS, nowMs)) {
+    return { provider: codexUsageCache.provider };
   }
+  try {
+    const provider = await getCodexUsage();
+    if (provider?.available) codexUsageCache = { provider, savedAtMs: Date.now() };
+    return { provider };
+  } catch (err) {
+    return {
+      provider: buildUnavailableProvider('codex', err.message || 'Codex usage unavailable'),
+      error: err.message
+    };
+  }
+}
 
+async function getClaudeProvider(nowMs) {
+  if (claudeRateLimitedUntil > nowMs) {
+    return {
+      provider: buildRateLimitedProvider('claude', claudeRateLimitedUntil, nowMs),
+      error: `HTTP 429 (rate limited until ${new Date(claudeRateLimitedUntil).toISOString()})`
+    };
+  }
+  if (isProviderCacheFresh(claudeUsageCache, PROVIDER_USAGE_CACHE_MS, nowMs)) {
+    return { provider: claudeUsageCache.provider };
+  }
+  try {
+    const provider = await fetchClaudeUsage();
+    if (provider?.available) {
+      claudeUsageCache = { provider, savedAtMs: Date.now() };
+      claudeRateLimitedUntil = 0;
+    }
+    return { provider };
+  } catch (err) {
+    let provider = buildUnavailableProvider('claude', err.message || 'Claude usage unavailable');
+    let error = err.message;
+    const providers = { claude: provider };
+    const errors = { claude: error };
+    if (isProviderHttp429({ providers, errors }, 'claude')) {
+      claudeRateLimitedUntil = Date.now() + CLAUDE_RATE_LIMIT_BACKOFF_MS;
+      provider = buildRateLimitedProvider('claude', claudeRateLimitedUntil);
+      error = `HTTP 429 (rate limited until ${new Date(claudeRateLimitedUntil).toISOString()})`;
+    }
+    return { provider, error };
+  }
+}
+
+async function getUsageWithProviderCaching() {
+  const nowMs = Date.now();
+  const codex = await getCodexProvider(nowMs);
+  const claude = await getClaudeProvider(nowMs);
+  const providers = { codex: codex.provider, claude: claude.provider };
+  const errors = {};
+  if (codex.error) errors.codex = codex.error;
+  if (claude.error) errors.claude = claude.error;
   return buildAccountUsagePayload({ providers, errors });
 }
 
-async function getUsageWithClaudeBackoff() {
-  const nowMs = Date.now();
-  if (claudeRateLimitedUntil > nowMs) {
-    return getUsageDuringClaudeCooldown(nowMs);
-  }
-
-  const usage = await getAccountUsage();
-  if (isProviderHttp429(usage, 'claude')) {
-    claudeRateLimitedUntil = Date.now() + CLAUDE_RATE_LIMIT_BACKOFF_MS;
-    return withProviderCooldown(usage, 'claude', claudeRateLimitedUntil);
-  }
-  if (usage?.providers?.claude?.available) claudeRateLimitedUntil = 0;
-  return usage;
+function withRefreshTimes(usage, nowMs = Date.now()) {
+  return {
+    ...usage,
+    nextRefreshAt: new Date(nowMs + AUTO_POLL_INTERVAL_MS).toISOString()
+  };
 }
 
 async function poll() {
@@ -253,7 +293,7 @@ async function poll() {
   if (app.isQuitting) return;
   pollInFlight = true;
   try {
-    const usage = await runWithTimeout(getUsageWithClaudeBackoff, 15_000);
+    const usage = withRefreshTimes(await runWithTimeout(getUsageWithProviderCaching, 15_000));
     if (app.isQuitting) return;
     latestUsage = usage;
     broadcastUsage(usage);
@@ -266,6 +306,14 @@ async function poll() {
   } finally {
     pollInFlight = false;
   }
+}
+
+function scheduleInitialPoll() {
+  if (initialPollTimer) return;
+  initialPollTimer = setTimeout(() => {
+    initialPollTimer = null;
+    poll();
+  }, 100);
 }
 
 app.on('second-instance', () => {
@@ -309,12 +357,12 @@ app.whenReady().then(() => {
     }, 16);
   });
 
-  poll();
-  pollTimer = setInterval(poll, 60_000);
+  pollTimer = setInterval(poll, AUTO_POLL_INTERVAL_MS);
 });
 
 app.on('before-quit', () => {
   app.isQuitting = true;
+  if (initialPollTimer) { clearTimeout(initialPollTimer); initialPollTimer = null; }
   if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
   if (saveStateTimer) { clearTimeout(saveStateTimer); saveStateTimer = null; }
   saveWindowState();

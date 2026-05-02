@@ -14,10 +14,13 @@ test('package exposes a local portable deploy command', () => {
   );
 });
 
-test('portable install script installs, shortcuts, and relaunches the app', () => {
+test('local install script installs unpacked app, shortcuts, and relaunches the app', () => {
   const script = fs.readFileSync(path.join(root, 'scripts', 'install-portable.ps1'), 'utf8');
   assert.match(script, /Programs\\PlanUsageMeter/);
+  assert.match(script, /win-unpacked/);
+  assert.match(script, /Get-UnpackedAppDir/);
   assert.match(script, /Copy-Item/);
+  assert.doesNotMatch(script, /Get-LatestPortableExe/);
   assert.match(script, /CreateShortcut/);
   assert.match(script, /Desktop/);
   assert.match(script, /\$TargetIcon = Join-Path \$InstallDir "\$AppName\.ico"/);

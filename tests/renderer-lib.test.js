@@ -1,7 +1,13 @@
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert');
-const { thresholdClass, clampPercent, formatResetIn, providerIconMeta } = require('../src/renderer/lib');
+const {
+  thresholdClass,
+  clampPercent,
+  formatResetIn,
+  formatRefreshMeta,
+  providerIconMeta
+} = require('../src/renderer/lib');
 
 const NOW = Date.parse('2026-05-01T12:00:00Z');
 const EM_DASH = '—';
@@ -127,4 +133,19 @@ test('formatResetIn: just past 24h boundary uses days', () => {
 test('formatResetIn: just under 24h still uses h+m', () => {
   const t = new Date(NOW + (23 * 60 + 30) * 60_000).toISOString();
   assert.strictEqual(formatResetIn(t, NOW), 'resets in 23h 30m');
+});
+
+// --- formatRefreshMeta -------------------------------------------------------
+
+test('formatRefreshMeta: shows last and next refresh times', () => {
+  const usage = {
+    updatedAt: '2026-01-01T12:03:00.000Z',
+    nextRefreshAt: '2026-01-01T12:08:00.000Z'
+  };
+  assert.strictEqual(formatRefreshMeta(usage), 'Last 12:03 · Next 12:08');
+});
+
+test('formatRefreshMeta: missing or invalid times fall back cleanly', () => {
+  assert.strictEqual(formatRefreshMeta(null), 'Last -- · Next --');
+  assert.strictEqual(formatRefreshMeta({ updatedAt: 'not-a-date' }), 'Last -- · Next --');
 });

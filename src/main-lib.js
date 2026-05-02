@@ -16,6 +16,9 @@ const PROVIDER_LABELS = Object.freeze({
   hermes: 'Hermes --'
 });
 
+const AUTO_POLL_INTERVAL_MS = 5 * 60_000;
+const PROVIDER_USAGE_CACHE_MS = 5 * 60_000;
+
 function unavailableLabel(providerName) {
   return PROVIDER_LABELS[providerName] || `${providerName || 'Provider'} --`;
 }
@@ -48,6 +51,11 @@ function isProviderHttp429(usage, providerName) {
   const errors = usage && usage.errors;
   return isHttp429Message(provider && provider.message) ||
     isHttp429Message(errors && errors[providerName]);
+}
+
+function isProviderCacheFresh(cache, ttlMs, nowMs = Date.now()) {
+  if (!cache || !cache.provider || typeof cache.savedAtMs !== 'number') return false;
+  return nowMs - cache.savedAtMs < ttlMs;
 }
 
 function buildAccountUsagePayload({ providers, errors = {}, updatedAt } = {}) {
@@ -161,6 +169,13 @@ function clampToDisplay(state, display, width = 340, fallbackHeight = 200) {
   return { x: state.x, y: state.y, width, height: state.height || fallbackHeight };
 }
 
+function selectDefaultDisplay(displays, primaryDisplay = null) {
+  const candidates = Array.isArray(displays) && displays.length > 0 ? displays : [primaryDisplay];
+  return candidates
+    .filter((d) => d && d.workArea)
+    .sort((a, b) => (b.workArea.x + b.workArea.width) - (a.workArea.x + a.workArea.width))[0] || null;
+}
+
 function buildTooltip(usage) {
   const providers = (usage && usage.providers) || {};
   const avail = Object.values(providers).filter((p) => p && p.available);
@@ -170,16 +185,20 @@ function buildTooltip(usage) {
 
 module.exports = {
   CH,
+  AUTO_POLL_INTERVAL_MS,
+  PROVIDER_USAGE_CACHE_MS,
   buildTimeoutPayload,
   buildErrorPayload,
   runWithTimeout,
   buildAccountUsagePayload,
   buildUnavailableProvider,
   buildRateLimitedProvider,
+  isProviderCacheFresh,
   isProviderHttp429,
   withProviderCooldown,
   readJsonSafe,
   writeJsonAtomic,
   clampToDisplay,
+  selectDefaultDisplay,
   buildTooltip
 };

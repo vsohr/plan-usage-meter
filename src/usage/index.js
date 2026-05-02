@@ -1,6 +1,6 @@
 const fs = require('fs');
 const path = require('path');
-const { execFileSync } = require('child_process');
+const { execFile } = require('child_process');
 
 const DEFAULT_CODEX_BASE_URL = 'https://chatgpt.com/backend-api/codex';
 const DEFAULT_CODEX_HOME = path.join(process.env.USERPROFILE || process.env.HOME || '', '.codex');
@@ -8,6 +8,7 @@ const CODEX_HOME = process.env.CODEX_HOME || DEFAULT_CODEX_HOME;
 const CODEX_SESSIONS_DIR = path.join(CODEX_HOME, 'sessions');
 const CLAUDE_HOME = process.env.CLAUDE_HOME || path.join(process.env.USERPROFILE || process.env.HOME || '', '.claude');
 const CLAUDE_CREDENTIALS_PATH = path.join(CLAUDE_HOME, '.credentials.json');
+const HERMES_TIMEOUT_MS = 15_000;
 
 function titleCaseSlug(value) {
   const cleaned = String(value || '').trim();
@@ -173,7 +174,19 @@ async function fetchClaudeUsage(credentialsPath = CLAUDE_CREDENTIALS_PATH) {
   return usage;
 }
 
-function fetchLiveUsageFromHermes() {
+function execFileUtf8(command, args, options, execFileImpl = execFile) {
+  return new Promise((resolve, reject) => {
+    execFileImpl(command, args, options, (err, stdout) => {
+      if (err) {
+        reject(err);
+        return;
+      }
+      resolve(stdout);
+    });
+  });
+}
+
+async function fetchLiveUsageFromHermes({ execFileImpl = execFile, timeoutMs = HERMES_TIMEOUT_MS } = {}) {
   const script = [
     'set -eu',
     'AGENT_DIR="${HERMES_AGENT_DIR:-$HOME/.hermes/hermes-agent}"',
@@ -225,12 +238,12 @@ PY
 `
   ].join('\n');
 
-  const output = execFileSync('wsl', ['-e', 'sh', '-lc', script], {
+  const output = await execFileUtf8('wsl', ['-e', 'sh', '-lc', script], {
     encoding: 'utf8',
-    timeout: 20000,
+    timeout: timeoutMs,
     windowsHide: true,
     stdio: ['ignore', 'pipe', 'ignore']
-  });
+  }, execFileImpl);
   const usage = JSON.parse(output.trim().split(/\r?\n/).pop());
   if (!usage?.available) throw new Error('Hermes usage unavailable');
   return usage;
@@ -323,7 +336,7 @@ async function getCodexUsage() {
   const errors = [];
 
   try {
-    return fetchLiveUsageFromHermes();
+    return await fetchLiveUsageFromHermes();
   } catch (err) {
     errors.push(`hermes-live: ${err.message}`);
   }

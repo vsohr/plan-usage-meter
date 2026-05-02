@@ -16,16 +16,15 @@ $TargetIcon = Join-Path $InstallDir "$AppName.ico"
 $SourceIcon = Join-Path $RepoRoot 'assets\icon.ico'
 $DevElectron = Join-Path $RepoRoot 'node_modules\electron\dist\electron.exe'
 
-function Get-LatestPortableExe {
-  $portable = Get-ChildItem -LiteralPath $DistDir -Filter "$AppName-*-portable.exe" -File |
-    Sort-Object LastWriteTime -Descending |
-    Select-Object -First 1
+function Get-UnpackedAppDir {
+  $unpacked = Join-Path $DistDir 'win-unpacked'
+  $exe = Join-Path $unpacked "$AppName.exe"
 
-  if (-not $portable) {
-    throw "No portable build found in $DistDir. Run npm run dist:portable first."
+  if (-not (Test-Path -LiteralPath $exe -PathType Leaf)) {
+    throw "No unpacked app found at $exe. Run npm run dist:portable first."
   }
 
-  return $portable.FullName
+  return $unpacked
 }
 
 function Stop-ProcessByPath {
@@ -86,15 +85,15 @@ function Refresh-ShellIcons {
   }
 }
 
-$SourceExe = Get-LatestPortableExe
-Write-Host "Installing $SourceExe"
+$SourceAppDir = Get-UnpackedAppDir
+Write-Host "Installing $SourceAppDir"
 
 Stop-AppProcesses
 Stop-ProcessByPath $TargetExe
 Stop-ProcessByPath $DevElectron
 
 New-Item -ItemType Directory -Force -Path $InstallDir | Out-Null
-Copy-Item -LiteralPath $SourceExe -Destination $TargetExe -Force
+Copy-Item -Path (Join-Path $SourceAppDir '*') -Destination $InstallDir -Recurse -Force
 Copy-Item -LiteralPath $SourceIcon -Destination $TargetIcon -Force
 
 $Desktop = [Environment]::GetFolderPath('Desktop')

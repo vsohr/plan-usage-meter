@@ -7,17 +7,21 @@ const path = require('path');
 
 const {
   CH,
+  AUTO_POLL_INTERVAL_MS,
+  PROVIDER_USAGE_CACHE_MS,
   buildTimeoutPayload,
   buildErrorPayload,
   runWithTimeout,
   buildAccountUsagePayload,
   buildUnavailableProvider,
   buildRateLimitedProvider,
+  isProviderCacheFresh,
   isProviderHttp429,
   withProviderCooldown,
   readJsonSafe,
   writeJsonAtomic,
   clampToDisplay,
+  selectDefaultDisplay,
   buildTooltip
 } = require('../src/main-lib');
 
@@ -32,6 +36,11 @@ test('CH: channel constants exist and are frozen', () => {
   assert.strictEqual(CH.APP_QUIT, 'app:quit');
   assert.strictEqual(CH.WIN_HEIGHT, 'window:report-height');
   assert.ok(Object.isFrozen(CH));
+});
+
+test('usage cadence constants keep providers on a five-minute window', () => {
+  assert.strictEqual(AUTO_POLL_INTERVAL_MS, 5 * 60_000);
+  assert.strictEqual(PROVIDER_USAGE_CACHE_MS, 5 * 60_000);
 });
 
 // --- clampToDisplay ----------------------------------------------------------
@@ -95,6 +104,20 @@ test('clampToDisplay: single-display happy path (bottom-right within work area)'
     display
   );
   assert.deepStrictEqual(r, { x: 1564, y: 824, width: 340, height: 200 });
+});
+
+test('selectDefaultDisplay: picks the rightmost display for first launch', () => {
+  const displays = [
+    { id: 1, workArea: { x: 0, y: 0, width: 1920, height: 1040 } },
+    { id: 2, workArea: { x: 1920, y: 0, width: 2560, height: 1400 } }
+  ];
+  assert.strictEqual(selectDefaultDisplay(displays), displays[1]);
+});
+
+test('selectDefaultDisplay: falls back to primary when no display list exists', () => {
+  const primary = { id: 1, workArea: { x: 0, y: 0, width: 1920, height: 1040 } };
+  assert.strictEqual(selectDefaultDisplay([], primary), primary);
+  assert.strictEqual(selectDefaultDisplay(null, primary), primary);
 });
 
 // --- runWithTimeout ----------------------------------------------------------
@@ -195,6 +218,15 @@ test('withProviderCooldown: preserves other providers and marks provider unavail
   assert.strictEqual(cooled.providers.claude.message, 'Rate limited; retrying in 10m');
   assert.strictEqual(cooled.errors.claude, 'HTTP 429 (rate limited until 2026-05-01T12:10:00.000Z)');
   assert.strictEqual(cooled.label, 'GPT 27%');
+});
+
+test('isProviderCacheFresh: only accepts cache entries inside ttl', () => {
+  const now = Date.parse('2026-05-01T12:00:00Z');
+  assert.strictEqual(isProviderCacheFresh(null, 300_000, now), false);
+  assert.strictEqual(isProviderCacheFresh({ provider: { available: true } }, 300_000, now), false);
+  assert.strictEqual(isProviderCacheFresh({ savedAtMs: now, provider: null }, 300_000, now), false);
+  assert.strictEqual(isProviderCacheFresh({ savedAtMs: now - 299_999, provider: { available: true } }, 300_000, now), true);
+  assert.strictEqual(isProviderCacheFresh({ savedAtMs: now - 300_000, provider: { available: true } }, 300_000, now), false);
 });
 
 test('buildAccountUsagePayload: matches account usage shape from provider results', () => {

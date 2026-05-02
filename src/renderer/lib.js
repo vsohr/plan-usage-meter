@@ -38,6 +38,19 @@ function formatResetIn(isoString, now) {
   return `resets in ${hours}h ${rem}m`;
 }
 
+function formatClockTime(isoString) {
+  const t = Date.parse(isoString);
+  if (!Number.isFinite(t)) return '--';
+  const d = new Date(t);
+  const hh = String(d.getHours()).padStart(2, '0');
+  const mm = String(d.getMinutes()).padStart(2, '0');
+  return `${hh}:${mm}`;
+}
+
+function formatRefreshMeta(usage) {
+  return `Last ${formatClockTime(usage?.updatedAt)} · Next ${formatClockTime(usage?.nextRefreshAt)}`;
+}
+
 function providerIconMeta(providerName) {
   if (providerName === 'claude') {
     return { symbolId: 'brand-claude', className: 'provider-icon icon-claude' };
@@ -49,5 +62,5 @@ function providerIconMeta(providerName) {
 }
 
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { thresholdClass, clampPercent, formatResetIn, providerIconMeta };
+  module.exports = { thresholdClass, clampPercent, formatResetIn, formatRefreshMeta, providerIconMeta };
 }
