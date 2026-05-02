@@ -11,6 +11,7 @@ const PROVIDER_DISPLAY_NAMES = {
 };
 
 const PROVIDER_ORDER = ['claude', 'codex'];
+const HIDDEN_WINDOW_LABELS = new Set(['Sonnet weekly']);
 
 function providerOrderedKeys(providers) {
   const keys = Object.keys(providers || {});
@@ -61,6 +62,10 @@ function buildWindowRow(w) {
   return row;
 }
 
+function visibleWindows(windows) {
+  return (windows || []).filter((w) => w && !HIDDEN_WINDOW_LABELS.has(w.label));
+}
+
 function buildCard(name, provider) {
   const display = PROVIDER_DISPLAY_NAMES[name] || name;
   const card = el('article', { className: 'card' });
@@ -85,7 +90,7 @@ function buildCard(name, provider) {
   const rows = [
     buildWindowRow(provider.primary),
     buildWindowRow(provider.secondary),
-    ...(provider.details || []).map(buildWindowRow)
+    ...visibleWindows(provider.details).map(buildWindowRow)
   ].filter(Boolean);
   for (const row of rows) card.appendChild(row);
   return card;
