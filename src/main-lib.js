@@ -10,6 +10,74 @@ const CH = Object.freeze({
   WIN_HEIGHT:    'window:report-height'
 });
 
+const PROVIDER_LABELS = Object.freeze({
+  codex: 'GPT --',
+  claude: 'Claude --',
+  hermes: 'Hermes --'
+});
+
+function unavailableLabel(providerName) {
+  return PROVIDER_LABELS[providerName] || `${providerName || 'Provider'} --`;
+}
+
+function buildUnavailableProvider(providerName, message) {
+  return {
+    available: false,
+    source: providerName,
+    label: unavailableLabel(providerName),
+    message: message || 'Usage unavailable'
+  };
+}
+
+function retryInText(untilMs, nowMs) {
+  const remainingMs = Math.max(0, Number(untilMs) - Number(nowMs));
+  const minutes = Math.max(1, Math.ceil(remainingMs / 60_000));
+  return `${minutes}m`;
+}
+
+function buildRateLimitedProvider(providerName, untilMs, nowMs = Date.now()) {
+  return buildUnavailableProvider(providerName, `Rate limited; retrying in ${retryInText(untilMs, nowMs)}`);
+}
+
+function isHttp429Message(message) {
+  return /\bHTTP\s+429\b/i.test(String(message || ''));
+}
+
+function isProviderHttp429(usage, providerName) {
+  const provider = usage && usage.providers && usage.providers[providerName];
+  const errors = usage && usage.errors;
+  return isHttp429Message(provider && provider.message) ||
+    isHttp429Message(errors && errors[providerName]);
+}
+
+function buildAccountUsagePayload({ providers, errors = {}, updatedAt } = {}) {
+  const providerMap = providers || {};
+  const preferred = providerMap.codex?.available ? providerMap.codex : providerMap.claude;
+  return {
+    available: Boolean(providerMap.codex?.available || providerMap.claude?.available),
+    source: 'account-usage',
+    label: preferred?.label || 'AI --',
+    updatedAt: updatedAt || new Date().toISOString(),
+    providers: providerMap,
+    errors,
+    primary: preferred?.primary || null,
+    secondary: preferred?.secondary || null,
+    planType: preferred?.planType || null
+  };
+}
+
+function withProviderCooldown(usage, providerName, untilMs, nowMs = Date.now()) {
+  const providers = { ...((usage && usage.providers) || {}) };
+  const errors = { ...((usage && usage.errors) || {}) };
+  providers[providerName] = buildRateLimitedProvider(providerName, untilMs, nowMs);
+  errors[providerName] = `HTTP 429 (rate limited until ${new Date(untilMs).toISOString()})`;
+  return buildAccountUsagePayload({
+    providers,
+    errors,
+    updatedAt: usage && usage.updatedAt
+  });
+}
+
 function buildTimeoutPayload(ms) {
   return {
     available: false,
@@ -105,6 +173,11 @@ module.exports = {
   buildTimeoutPayload,
   buildErrorPayload,
   runWithTimeout,
+  buildAccountUsagePayload,
+  buildUnavailableProvider,
+  buildRateLimitedProvider,
+  isProviderHttp429,
+  withProviderCooldown,
   readJsonSafe,
   writeJsonAtomic,
   clampToDisplay,

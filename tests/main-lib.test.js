@@ -10,6 +10,11 @@ const {
   buildTimeoutPayload,
   buildErrorPayload,
   runWithTimeout,
+  buildAccountUsagePayload,
+  buildUnavailableProvider,
+  buildRateLimitedProvider,
+  isProviderHttp429,
+  withProviderCooldown,
   readJsonSafe,
   writeJsonAtomic,
   clampToDisplay,
@@ -139,6 +144,73 @@ test('buildErrorPayload: surfaces error message verbatim', () => {
 test('buildErrorPayload: handles non-Error inputs', () => {
   const p = buildErrorPayload('plain string');
   assert.strictEqual(p.errors.fatal, 'plain string');
+});
+
+// --- provider rate-limit helpers --------------------------------------------
+
+test('isProviderHttp429: detects provider HTTP 429 messages', () => {
+  assert.strictEqual(isProviderHttp429({
+    providers: { claude: { available: false, message: 'HTTP 429' } },
+    errors: {}
+  }, 'claude'), true);
+  assert.strictEqual(isProviderHttp429({
+    providers: { claude: { available: false, message: 'HTTP 500' } },
+    errors: { claude: 'HTTP 429' }
+  }, 'claude'), true);
+  assert.strictEqual(isProviderHttp429({
+    providers: { claude: { available: false, message: 'HTTP 401' } },
+    errors: { claude: 'HTTP 401' }
+  }, 'claude'), false);
+});
+
+test('buildRateLimitedProvider: tells the user when retry will happen', () => {
+  const now = Date.parse('2026-05-01T12:00:00Z');
+  const until = now + 15 * 60_000;
+  assert.deepStrictEqual(buildRateLimitedProvider('claude', until, now), {
+    available: false,
+    source: 'claude',
+    label: 'Claude --',
+    message: 'Rate limited; retrying in 15m'
+  });
+});
+
+test('withProviderCooldown: preserves other providers and marks provider unavailable', () => {
+  const now = Date.parse('2026-05-01T12:00:00Z');
+  const usage = {
+    available: true,
+    source: 'account-usage',
+    label: 'GPT 27%',
+    updatedAt: new Date(now).toISOString(),
+    providers: {
+      codex: { available: true, source: 'codex-live', label: 'GPT 27%' },
+      claude: { available: false, source: 'claude', label: 'Claude --', message: 'HTTP 429' }
+    },
+    errors: { claude: 'HTTP 429' },
+    primary: { label: 'Session', usedPercent: 27 },
+    secondary: null,
+    planType: 'Pro'
+  };
+  const cooled = withProviderCooldown(usage, 'claude', now + 10 * 60_000, now);
+  assert.strictEqual(cooled.providers.codex, usage.providers.codex);
+  assert.strictEqual(cooled.providers.claude.message, 'Rate limited; retrying in 10m');
+  assert.strictEqual(cooled.errors.claude, 'HTTP 429 (rate limited until 2026-05-01T12:10:00.000Z)');
+  assert.strictEqual(cooled.label, 'GPT 27%');
+});
+
+test('buildAccountUsagePayload: matches account usage shape from provider results', () => {
+  const usage = buildAccountUsagePayload({
+    providers: {
+      codex: { available: true, source: 'codex-live', label: 'GPT 20%', primary: { label: 'Session' }, planType: 'Pro' },
+      claude: buildUnavailableProvider('claude', 'Rate limited; retrying in 15m')
+    },
+    errors: { claude: 'HTTP 429' },
+    updatedAt: '2026-05-01T12:00:00.000Z'
+  });
+  assert.strictEqual(usage.available, true);
+  assert.strictEqual(usage.label, 'GPT 20%');
+  assert.strictEqual(usage.primary.label, 'Session');
+  assert.strictEqual(usage.planType, 'Pro');
+  assert.strictEqual(usage.providers.claude.label, 'Claude --');
 });
 
 // --- buildTooltip ------------------------------------------------------------

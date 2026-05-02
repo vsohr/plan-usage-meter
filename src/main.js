@@ -3,10 +3,15 @@
 const path = require('path');
 const { app, BrowserWindow, ipcMain, screen, Tray, Menu, nativeImage } = require('electron');
 
-const { getAccountUsage } = require('./usage');
+const { getAccountUsage, getCodexUsage } = require('./usage');
 const {
   CH,
   runWithTimeout,
+  buildAccountUsagePayload,
+  buildUnavailableProvider,
+  buildRateLimitedProvider,
+  isProviderHttp429,
+  withProviderCooldown,
   clampToDisplay,
   readJsonSafe,
   writeJsonAtomic,
@@ -26,6 +31,9 @@ let pollInFlight = false;
 let pollTimer = null;
 let latestUsage = null;
 let resizeTimer = null;
+let claudeRateLimitedUntil = 0;
+
+const CLAUDE_RATE_LIMIT_BACKOFF_MS = 15 * 60_000;
 
 let settings = { openAtLogin: false };
 let settingsPath = null;
@@ -207,12 +215,45 @@ function broadcastUsage(usage) {
   }
 }
 
+async function getUsageDuringClaudeCooldown(nowMs = Date.now()) {
+  const providers = {
+    claude: buildRateLimitedProvider('claude', claudeRateLimitedUntil, nowMs)
+  };
+  const errors = {
+    claude: `HTTP 429 (rate limited until ${new Date(claudeRateLimitedUntil).toISOString()})`
+  };
+
+  try {
+    providers.codex = await getCodexUsage();
+  } catch (err) {
+    providers.codex = buildUnavailableProvider('codex', err.message || 'Codex usage unavailable');
+    errors.codex = err.message;
+  }
+
+  return buildAccountUsagePayload({ providers, errors });
+}
+
+async function getUsageWithClaudeBackoff() {
+  const nowMs = Date.now();
+  if (claudeRateLimitedUntil > nowMs) {
+    return getUsageDuringClaudeCooldown(nowMs);
+  }
+
+  const usage = await getAccountUsage();
+  if (isProviderHttp429(usage, 'claude')) {
+    claudeRateLimitedUntil = Date.now() + CLAUDE_RATE_LIMIT_BACKOFF_MS;
+    return withProviderCooldown(usage, 'claude', claudeRateLimitedUntil);
+  }
+  if (usage?.providers?.claude?.available) claudeRateLimitedUntil = 0;
+  return usage;
+}
+
 async function poll() {
   if (pollInFlight) return;
   if (app.isQuitting) return;
   pollInFlight = true;
   try {
-    const usage = await runWithTimeout(getAccountUsage, 15_000);
+    const usage = await runWithTimeout(getUsageWithClaudeBackoff, 15_000);
     if (app.isQuitting) return;
     latestUsage = usage;
     broadcastUsage(usage);
