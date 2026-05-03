@@ -117,10 +117,9 @@ async function fetchLiveUsageFromCodexAuth(authPath = path.join(CODEX_HOME, 'aut
 
 function normalizeClaudeWindow(window, label) {
   if (!window || typeof window.utilization !== 'number') return null;
-  const usedPercent = window.utilization <= 1 ? window.utilization * 100 : window.utilization;
   return {
     label,
-    usedPercent,
+    usedPercent: window.utilization,
     windowMinutes: null,
     resetsAt: parseDate(window.resets_at)
   };
@@ -154,7 +153,7 @@ async function fetchClaudeUsage(credentialsPath = CLAUDE_CREDENTIALS_PATH) {
   if (extra.is_enabled && typeof extra.utilization === 'number') {
     details.push({
       label: 'Extra usage',
-      usedPercent: extra.utilization <= 1 ? extra.utilization * 100 : extra.utilization,
+      usedPercent: extra.utilization,
       windowMinutes: null,
       resetsAt: null
     });
