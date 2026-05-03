@@ -6,7 +6,7 @@ Users running multiple LLM coding tools (Claude Code, OpenAI Codex/ChatGPT, Herm
 ## Solution
 A standalone Windows desktop widget — `plan-usage-meter` — that:
 - Auto-detects every LLM provider whose credentials exist on the local machine.
-- Polls each provider every 60 seconds for current quota usage.
+- Polls each provider every 10 minutes for current quota usage.
 - Renders one card per provider in an always-on-top, frameless, draggable window.
 - Includes muted "not detected" cards so users see exactly what was/wasn't found (auto-detection is transparent, not opaque).
 - Lives in the system tray, supports open-at-login, and can be closed-to-tray.
@@ -89,14 +89,14 @@ Power users (developers) who use multiple LLM coding tools simultaneously and wa
 ### F5. Polling & manual refresh
 
 #### Behavior
-- Main process runs `getAccountUsage()` every 60s (first poll runs immediately on `ready`).
-- Tray "Refresh now" and the in-window refresh button both trigger an immediate poll without resetting the 60s interval.
+- Main process runs `getAccountUsage()` every 10 minutes (first poll runs immediately on `ready`).
+- Tray "Refresh now" and the in-window refresh button both trigger an immediate poll without resetting the 10-minute interval.
 - Each `getAccountUsage()` call is wrapped in a 15-second timeout (see Edge Cases). Timeout = treat as "unavailable" with message "Provider timed out".
-- Polls are serialised: if a poll is already in flight when the 60s timer or a manual refresh fires, the new request is dropped (not queued). The in-window refresh button is visually disabled (or briefly spins) while a poll is in flight.
+- Polls are serialised: if a poll is already in flight when the 10-minute timer or a manual refresh fires, the new request is dropped (not queued). The in-window refresh button is visually disabled (or briefly spins) while a poll is in flight.
 
 #### Intent
 - **User goal:** Numbers are fresh without me thinking about it; I can force-refresh when I just hit send and want immediate feedback.
-- **Anti-goals:** Hammering Anthropic/OpenAI APIs. 60s is the floor; manual refresh is opportunistic, not a stress test.
+- **Anti-goals:** Hammering Anthropic/OpenAI APIs. Ten minutes is the default cadence; manual refresh is opportunistic, not a stress test.
 
 ---
 
@@ -184,8 +184,8 @@ Power users (developers) who use multiple LLM coding tools simultaneously and wa
 
 ### AC4 — Polling and manual refresh
 **Given** the app is running
-**When** 60 seconds elapse, OR the user clicks the in-window refresh button, OR the user clicks tray → Refresh now
-**Then** `getAccountUsage()` runs and cards update with new values; manual triggers fire immediately without waiting for the 60s interval.
+**When** 10 minutes elapse, OR the user clicks the in-window refresh button, OR the user clicks tray → Refresh now
+**Then** `getAccountUsage()` runs and cards update with new values; manual triggers fire immediately without waiting for the 10-minute interval.
 
 ### AC5 — Close-to-tray and tray menu
 **Given** the app is running
@@ -213,7 +213,7 @@ Power users (developers) who use multiple LLM coding tools simultaneously and wa
 **Given** the app is running with network connectivity
 **When** the user disconnects from the network
 **Then** the next poll's cards flip to "unavailable" with the upstream error message displayed in each affected card.
-**And when** the user reconnects, the next poll within 60 seconds restores the cards to available state.
+**And when** the user reconnects, the next poll within 10 minutes restores the cards to available state.
 
 ### AC10 — Single-instance lock
 **Given** the app is already running
@@ -282,7 +282,7 @@ Power users (developers) who use multiple LLM coding tools simultaneously and wa
 **When** 15 seconds elapse from the start of `getAccountUsage()`
 **Then** the call is aborted (via `AbortController` or equivalent) and treated as a failure for the current poll.
 **And** the affected provider card shows "unavailable" with message `"Timed out"`.
-**And** the next 60s poll cycle proceeds normally.
+**And** the next 10-minute poll cycle proceeds normally.
 
 > Intent: a hung API must not freeze the polling loop. Without this, one bad upstream stalls all card refreshes for both providers.
 
@@ -350,8 +350,8 @@ Power users (developers) who use multiple LLM coding tools simultaneously and wa
 
 | Question | Decision | Rationale |
 |---|---|---|
-| Does manual refresh reset the 60s timer? | No | F5 already says so. Confirmed: simpler, predictable cadence. |
-| What if both refresh sources fire while a poll is in flight? | Drop the new request | F5 + AC16. Avoids stampedes; next 60s tick will pick up. |
+| Does manual refresh reset the 10-minute timer? | No | F5 already says so. Confirmed: simpler, predictable cadence. |
+| What if both refresh sources fire while a poll is in flight? | Drop the new request | F5 + AC16. Avoids stampedes; next 10-minute tick will pick up. |
 | Should "Not detected" cards be collapsible? | No | Out of scope (FUTURE.md). v1 keeps a single static layout. |
 | What happens if `getAccountUsage()` itself throws (not just per-provider error)? | All cards flip to a single error state with the thrown message; next poll retries | Captured under AC9 + AC12 spirit; main-process catch-all required. |
 | Per-poll timeout duration? | 15 seconds | Long enough for slow upstreams, short enough that one hung provider doesn't starve the UI for a full minute. See AC19. |

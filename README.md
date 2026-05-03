@@ -36,7 +36,7 @@ If neither Claude nor Codex credentials exist, every card shows **"Not detected"
 Right-click the tray icon for:
 
 - **Show / Hide** — toggle the window.
-- **Refresh now** — fire an immediate poll without resetting the 60-second interval.
+- **Refresh now** — fire an immediate poll without resetting the 10-minute interval.
 - **Open at login** — checkbox. Persisted across reboots in `%APPDATA%/Plan Usage Meter/settings.json`. Uses `openAsHidden: true` so a Windows boot puts the icon in the tray with no window flash.
 - **Quit** — the only path that actually exits the process.
 

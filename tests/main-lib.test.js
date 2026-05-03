@@ -39,9 +39,9 @@ test('CH: channel constants exist and are frozen', () => {
   assert.ok(Object.isFrozen(CH));
 });
 
-test('usage cadence constants keep providers on a five-minute window', () => {
-  assert.strictEqual(AUTO_POLL_INTERVAL_MS, 5 * 60_000);
-  assert.strictEqual(PROVIDER_USAGE_CACHE_MS, 5 * 60_000);
+test('usage cadence constants keep providers on a ten-minute window', () => {
+  assert.strictEqual(AUTO_POLL_INTERVAL_MS, 10 * 60_000);
+  assert.strictEqual(PROVIDER_USAGE_CACHE_MS, 10 * 60_000);
 });
 
 // --- clampToDisplay ----------------------------------------------------------

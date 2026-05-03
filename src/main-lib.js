@@ -16,8 +16,8 @@ const PROVIDER_LABELS = Object.freeze({
   hermes: 'Hermes --'
 });
 
-const AUTO_POLL_INTERVAL_MS = 5 * 60_000;
-const PROVIDER_USAGE_CACHE_MS = 5 * 60_000;
+const AUTO_POLL_INTERVAL_MS = 10 * 60_000;
+const PROVIDER_USAGE_CACHE_MS = 10 * 60_000;
 
 function unavailableLabel(providerName) {
   return PROVIDER_LABELS[providerName] || `${providerName || 'Provider'} --`;

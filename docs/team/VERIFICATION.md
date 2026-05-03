@@ -50,8 +50,8 @@
 
 ### AC4 — Polling and manual refresh
 - **Status:** EXECUTED-PASS (code path) + INSPECTED-PASS (visual)
-- **Evidence:** `src/main.js:271-272` runs `poll()` immediately and `setInterval(poll, 60_000)`. `poll()` (lines 210-228) is serialised by `pollInFlight`. IPC handler at line 252 wires `usage:refresh` → `poll()` without resetting the timer. Tray menu has `Refresh now` (line 174) → `poll()`. The manual-refresh path returns `{accepted:false}` when in-flight (`src/main.js:253`) — verified by reading both ends.
-- **Manual walkthrough:** open the window, watch updatedAt; click in-window ↻ button → updatedAt changes within seconds. Right-click tray → Refresh now → updatedAt changes. Wait 60 s with no clicks → poll fires automatically.
+- **Evidence:** `src/main.js` runs `setInterval(poll, AUTO_POLL_INTERVAL_MS)`, currently 10 minutes. `poll()` is serialised by `pollInFlight`. IPC wires `usage:refresh` → `poll()` without resetting the timer. Tray menu has `Refresh now` → `poll()`. The manual-refresh path returns `{accepted:false}` when in-flight — verified by reading both ends.
+- **Manual walkthrough:** open the window, watch updatedAt; click in-window ↻ button → updatedAt changes within seconds. Right-click tray → Refresh now → updatedAt changes. Wait 10 minutes with no clicks → poll fires automatically.
 
 ### AC5 — Close-to-tray and tray menu
 - **Status:** INSPECTED-PASS (manual walkthrough required)
@@ -75,7 +75,7 @@
 ### AC9 — Network failure handling
 - **Status:** INSPECTED-PASS (manual walkthrough required)
 - **Evidence:** `src/main.js:215` wraps `getAccountUsage` in `runWithTimeout` which never throws (`src/main-lib.js:48-63`). On any failure the wrapper substitutes `buildErrorPayload` (lines 30-46) with `provider.message` set to the upstream error text. The detection module (`codex-usage.js`) already routes per-provider HTTP/fetch errors into `provider.message` verbatim. Renderer card shows `provider.message` when `available !== true` (renderer.js:60).
-- **Manual walkthrough:** open the app, both cards available. Disable network (airplane mode). Wait ≤60 s or click ↻ — both cards flip to "Not detected" with messages like `fetch failed`/`getaddrinfo ENOTFOUND`. Re-enable network. Within 60 s the next poll restores both cards.
+- **Manual walkthrough:** open the app, both cards available. Disable network (airplane mode). Wait up to 10 minutes or click ↻ — both cards flip to "Not detected" with messages like `fetch failed`/`getaddrinfo ENOTFOUND`. Re-enable network. Within 10 minutes the next poll restores both cards.
 
 ### AC10 — Single-instance lock
 - **Status:** INSPECTED-PASS (manual walkthrough required)
@@ -118,7 +118,7 @@
 
 ### AC19 — Per-poll timeout
 - **Status:** INSPECTED-PASS
-- **Evidence:** `runWithTimeout(getAccountUsage, 15_000)` at `src/main.js:215`. Wrapper guarantees resolution within 15 s by `setTimeout(buildTimeoutPayload, 15_000)`. `buildTimeoutPayload` synthesises `provider.message: 'Provider timed out'` for both keys. Polling timer is unaffected (next 60 s cycle proceeds normally).
+- **Evidence:** `runWithTimeout(getAccountUsage, 15_000)` in `src/main.js`. Wrapper guarantees resolution within 15 s by `setTimeout(buildTimeoutPayload, 15_000)`. `buildTimeoutPayload` synthesises `provider.message: 'Provider timed out'` for both keys. Polling timer is unaffected (next 10-minute cycle proceeds normally).
 
 ### AC20 — Multiple Windows users / non-default %USERPROFILE%
 - **Status:** INSPECTED-PASS
@@ -170,7 +170,7 @@ None.
 10. **Single-instance lock** — open a second shell, run `npm start`. *Expect:* no second window; existing window pops to focus. **AC10.**
 11. **Open at login toggle** — right-click tray → check "Open at login". Right-click again → confirm checked. *Expect:* `%APPDATA%\plan-usage-meter\settings.json` now contains `"openAtLogin": true`. **AC7.**
 12. **Reboot test (long)** — restart Windows. After login, *expect:* tray icon present, no window flash. Right-click tray, confirm checkbox still ✓. **AC7.**
-13. **Network failure** — disable Wi-Fi / unplug Ethernet. Click ↻. *Expect:* both cards flip to "Not detected" with upstream message (`fetch failed` or similar). Re-enable network → wait ≤60 s → cards restore. **AC9.**
+13. **Network failure** — disable Wi-Fi / unplug Ethernet. Click ↻. *Expect:* both cards flip to "Not detected" with upstream message (`fetch failed` or similar). Re-enable network → wait up to 10 minutes or click ↻ → cards restore. **AC9.**
 14. **Zero credentials** — quit app via tray Quit. Move `~/.codex/auth.json` and `~/.claude/.credentials.json` aside. `npm start` again. *Expect:* both cards muted with credential-path message; tray tooltip reads `No providers detected`; no console errors in DevTools. Restore credentials before continuing. **AC11.**
 15. **No flicker on resize** — with cards rendering, force one to grow (e.g. switch creds so a `details` array adds rows). *Expect:* window grows upward (bottom edge fixed), no flash/white frame. **AC24.**
 16. **Console clean check** — over the entire walkthrough, confirm DevTools renderer console shows zero `error` entries and zero unhandled rejections; main-process stderr (visible in the launching shell) is empty except possibly known warnings. **AC23.**

@@ -24,13 +24,13 @@ If `npm start` errors with `Cannot read properties of undefined (reading 'reques
 
 Three-process Electron app with a strict, locked module boundary:
 
-- **main** ([src/main.js](src/main.js)) owns app lifecycle, the `BrowserWindow`, the `Tray`, the 60s polling timer, persistence I/O, single-instance lock, login-item settings, and all `ipcMain` handlers. It imports `./usage` (detection) and `./main-lib` (pure helpers) — nothing from `src/renderer/`.
+- **main** ([src/main.js](src/main.js)) owns app lifecycle, the `BrowserWindow`, the `Tray`, the 10-minute polling timer, persistence I/O, single-instance lock, login-item settings, and all `ipcMain` handlers. It imports `./usage` (detection) and `./main-lib` (pure helpers) — nothing from `src/renderer/`.
 - **preload** ([src/preload.js](src/preload.js)) is the *only* bridge. It exposes a frozen `window.api` via `contextBridge` with exactly five methods: `onUsage(cb)`, `refreshNow()`, `hide()`, `quit()`, `reportHeight(px)`. Channel names are duplicated as a frozen `CH` object in both [src/preload.js](src/preload.js) and [src/main-lib.js](src/main-lib.js) — keep them in sync.
 - **renderer** ([src/renderer/](src/renderer/)) is vanilla JS + plain `<script>` tags (no bundler). It calls only `window.api.*`, never `require()`. It MUST NOT import `src/usage/index.js` — detection lives in main only. CSP in [index.html](src/renderer/index.html) blocks remote script.
 
 ### Data flow (one poll cycle)
 
-1. `setInterval(poll, 60_000)` in main fires (also on `app.whenReady`, on tray "Refresh now", and on `ipcMain.handle('usage:refresh')`).
+1. `setInterval(poll, AUTO_POLL_INTERVAL_MS)` in main fires every 10 minutes (also on initial window readiness, tray "Refresh now", and `ipcMain.handle('usage:refresh')`).
 2. `poll()` is serialised by a `pollInFlight` flag — overlapping refresh requests return `{ accepted: false }`.
 3. `runWithTimeout(getAccountUsage, 15_000)` from [src/main-lib.js](src/main-lib.js) wraps the detection call. **The timeout never throws** — on timeout/error it resolves with a synthetic `getAccountUsage()`-shaped payload (`buildTimeoutPayload` / `buildErrorPayload`) so the renderer always receives the same shape. This is why the wrapper exists: the copied detection module must not be edited (see below).
 4. Result is broadcast on `usage:update` to every `BrowserWindow`, the tray tooltip is rebuilt via `buildTooltip()`, and the tray menu is rebuilt to refresh checkbox state.
