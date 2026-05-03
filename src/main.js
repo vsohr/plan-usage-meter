@@ -19,8 +19,12 @@ const {
   pinnedResizeBounds,
   readJsonSafe,
   writeJsonAtomic,
-  buildTooltip
+  buildTooltip,
+  resolveClaudeCredentialsPath,
+  ensureFreshClaudeCredentials
 } = require('./main-lib');
+
+const CLAUDE_CREDENTIALS_PATH = resolveClaudeCredentialsPath();
 
 if (!app.requestSingleInstanceLock()) {
   app.quit();
@@ -240,6 +244,15 @@ async function getCodexProvider(nowMs) {
   }
 }
 
+async function preflightClaudeRefresh({ force = false } = {}) {
+  try {
+    return await ensureFreshClaudeCredentials(CLAUDE_CREDENTIALS_PATH, { force });
+  } catch (err) {
+    console.warn('[claude] token refresh failed:', err.message);
+    return { refreshed: false, error: err.message };
+  }
+}
+
 async function getClaudeProvider(nowMs) {
   if (claudeRateLimitedUntil > nowMs) {
     return {
@@ -250,6 +263,9 @@ async function getClaudeProvider(nowMs) {
   if (isProviderCacheFresh(claudeUsageCache, PROVIDER_USAGE_CACHE_MS, nowMs)) {
     return { provider: claudeUsageCache.provider };
   }
+
+  await preflightClaudeRefresh();
+
   try {
     const provider = await fetchClaudeUsage();
     if (provider?.available) {
@@ -258,6 +274,21 @@ async function getClaudeProvider(nowMs) {
     }
     return { provider };
   } catch (err) {
+    if (/HTTP\s*401\b/i.test(err.message || '')) {
+      const refresh = await preflightClaudeRefresh({ force: true });
+      if (refresh.refreshed) {
+        try {
+          const provider = await fetchClaudeUsage();
+          if (provider?.available) {
+            claudeUsageCache = { provider, savedAtMs: Date.now() };
+            claudeRateLimitedUntil = 0;
+          }
+          return { provider };
+        } catch (retryErr) {
+          err = retryErr;
+        }
+      }
+    }
     let provider = buildUnavailableProvider('claude', err.message || 'Claude usage unavailable');
     let error = err.message;
     const providers = { claude: provider };

@@ -40,6 +40,14 @@ Three-process Electron app with a strict, locked module boundary:
 
 [src/usage/index.js](src/usage/index.js) is a verbatim, SHA256-verified copy of `c:/claude-portal/lib/codex-usage.js`. **Do not edit it.** It's an intentional fork that accepts drift risk to keep this app standalone (no shared package). Anything that would be a fix to detection logic belongs *upstream* in `claude-portal`, then re-copied here. Anything that wraps, times out, or post-processes detection belongs in [src/main-lib.js](src/main-lib.js).
 
+That includes **auth resilience**. The detection module reads `claudeAiOauth.accessToken` from `~/.claude/.credentials.json` and sends it to the usage API; it does not consult `expiresAt` or use the `refreshToken`. When the access token expires the API returns HTTP 401 and Claude silently falls off the meter until something else (the Claude Code CLI itself, on its next request) rewrites the credentials file. To keep the meter resilient without touching the locked module, [src/main-lib.js](src/main-lib.js) exposes `ensureFreshClaudeCredentials()`, which:
+
+- reads the credentials file, returns early if `expiresAt - now > CLAUDE_TOKEN_REFRESH_LEEWAY_MS` (60s);
+- otherwise POSTs to `https://console.anthropic.com/v1/oauth/token` with the `refresh_token` grant and the public Claude Code OAuth client ID;
+- atomically rewrites `.credentials.json` (tmp + rename, mode `0o600`), preserving unrelated fields (`subscriptionType`, `rateLimitTier`, `scopes`, etc.).
+
+[src/main.js](src/main.js) `getClaudeProvider` calls it as a preflight before `fetchClaudeUsage` and again with `force: true` on a 401, retrying once. Refresh failures are logged but do not crash the poll cycle — the user simply sees the stale-token error in the card and can run `claude` in a terminal to recover. The same logic is mirrored in `c:/claude-portal/lib/claude-auth.js` (called from `server.js` around `getAccountUsage`); keep the two implementations in sync when changing refresh behaviour.
+
 It exports `getAccountUsage()` which probes (in order): Hermes via WSL (`wsl -e sh -lc ...` running a Python venv at `~/.hermes/hermes-agent/`), then direct Codex auth at `~/.codex/auth.json`, then Codex session log files at `~/.codex/sessions/*.jsonl`, then Claude credentials at `~/.claude/.credentials.json`. Absent providers are silently skipped at the source level but surfaced in the `providers` map as `{ available: false, message }` so the renderer can show muted "Not detected" cards (this is intentional — the widget doubles as a config diagnostic).
 
 ### Persistence

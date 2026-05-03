@@ -23,7 +23,11 @@ const {
   clampToDisplay,
   selectDefaultDisplay,
   pinnedResizeBounds,
-  buildTooltip
+  buildTooltip,
+  CLAUDE_TOKEN_REFRESH_LEEWAY_MS,
+  isClaudeTokenStale,
+  refreshClaudeOauthCredentials,
+  ensureFreshClaudeCredentials
 } = require('../src/main-lib');
 
 const display = { workArea: { x: 0, y: 0, width: 1920, height: 1040 } };
@@ -350,4 +354,180 @@ test('readJsonSafe: parsed object merged over defaults', () => {
   writeJsonAtomic(p, { openAtLogin: true });
   const r = readJsonSafe(p, { openAtLogin: false, other: 'kept' });
   assert.deepStrictEqual(r, { openAtLogin: true, other: 'kept' });
+});
+
+// --- Claude OAuth refresh ---------------------------------------------------
+
+const NOW = 1_770_000_000_000;
+const FRESH_CREDS = () => ({
+  claudeAiOauth: {
+    accessToken: 'live-token',
+    refreshToken: 'refresh-xyz',
+    expiresAt: NOW + 60 * 60_000,
+    scopes: ['user:inference'],
+    subscriptionType: 'max',
+    rateLimitTier: 'tier-1'
+  }
+});
+const STALE_CREDS = () => ({
+  claudeAiOauth: {
+    accessToken: 'expired-token',
+    refreshToken: 'refresh-xyz',
+    expiresAt: NOW - 60_000,
+    scopes: ['user:inference'],
+    subscriptionType: 'max',
+    rateLimitTier: 'tier-1'
+  }
+});
+
+test('isClaudeTokenStale: fresh token returns false', () => {
+  assert.strictEqual(isClaudeTokenStale(FRESH_CREDS(), NOW), false);
+});
+
+test('isClaudeTokenStale: token within leeway window returns true', () => {
+  const c = FRESH_CREDS();
+  c.claudeAiOauth.expiresAt = NOW + (CLAUDE_TOKEN_REFRESH_LEEWAY_MS - 1);
+  assert.strictEqual(isClaudeTokenStale(c, NOW), true);
+});
+
+test('isClaudeTokenStale: expired token returns true', () => {
+  assert.strictEqual(isClaudeTokenStale(STALE_CREDS(), NOW), true);
+});
+
+test('isClaudeTokenStale: missing refresh token returns false (cannot refresh)', () => {
+  const c = STALE_CREDS();
+  c.claudeAiOauth.refreshToken = '';
+  assert.strictEqual(isClaudeTokenStale(c, NOW), false);
+});
+
+test('isClaudeTokenStale: missing oauth block returns false', () => {
+  assert.strictEqual(isClaudeTokenStale({}, NOW), false);
+  assert.strictEqual(isClaudeTokenStale(null, NOW), false);
+});
+
+function mockFetch(responses) {
+  const calls = [];
+  const queue = Array.isArray(responses) ? [...responses] : [responses];
+  return {
+    calls,
+    fetch: async (url, init) => {
+      calls.push({ url, init });
+      const next = queue.shift();
+      if (!next) throw new Error('mockFetch: no more queued responses');
+      if (next instanceof Error) throw next;
+      return {
+        ok: next.status >= 200 && next.status < 300,
+        status: next.status,
+        text: async () => next.body || '',
+        json: async () => JSON.parse(next.body || '{}')
+      };
+    }
+  };
+}
+
+test('refreshClaudeOauthCredentials: posts refresh grant and updates fields', async () => {
+  const mock = mockFetch({
+    status: 200,
+    body: JSON.stringify({ access_token: 'NEW', refresh_token: 'NEW-R', expires_in: 3600 })
+  });
+  const next = await refreshClaudeOauthCredentials(STALE_CREDS(), { fetchImpl: mock.fetch, nowMs: NOW });
+  assert.strictEqual(next.claudeAiOauth.accessToken, 'NEW');
+  assert.strictEqual(next.claudeAiOauth.refreshToken, 'NEW-R');
+  assert.strictEqual(next.claudeAiOauth.expiresAt, NOW + 3600 * 1000);
+  assert.strictEqual(next.claudeAiOauth.subscriptionType, 'max', 'preserves unrelated fields');
+  assert.strictEqual(mock.calls.length, 1);
+  const { url, init } = mock.calls[0];
+  assert.strictEqual(url, 'https://console.anthropic.com/v1/oauth/token');
+  assert.strictEqual(init.method, 'POST');
+  const body = JSON.parse(init.body);
+  assert.strictEqual(body.grant_type, 'refresh_token');
+  assert.strictEqual(body.refresh_token, 'refresh-xyz');
+  assert.strictEqual(typeof body.client_id, 'string');
+  assert.ok(body.client_id.length > 0);
+});
+
+test('refreshClaudeOauthCredentials: keeps prior refresh token when server omits it', async () => {
+  const mock = mockFetch({
+    status: 200,
+    body: JSON.stringify({ access_token: 'NEW', expires_in: 3600 })
+  });
+  const next = await refreshClaudeOauthCredentials(STALE_CREDS(), { fetchImpl: mock.fetch, nowMs: NOW });
+  assert.strictEqual(next.claudeAiOauth.refreshToken, 'refresh-xyz');
+});
+
+test('refreshClaudeOauthCredentials: throws on non-2xx', async () => {
+  const mock = mockFetch({ status: 401, body: '{"error":"invalid_grant"}' });
+  await assert.rejects(
+    refreshClaudeOauthCredentials(STALE_CREDS(), { fetchImpl: mock.fetch, nowMs: NOW }),
+    /HTTP 401/
+  );
+});
+
+test('refreshClaudeOauthCredentials: throws when refresh token missing', async () => {
+  const c = STALE_CREDS();
+  c.claudeAiOauth.refreshToken = '';
+  await assert.rejects(
+    refreshClaudeOauthCredentials(c, { fetchImpl: async () => { throw new Error('should not call'); }, nowMs: NOW }),
+    /refresh token not present/
+  );
+});
+
+test('ensureFreshClaudeCredentials: fresh token is a no-op (no fetch, no write)', async () => {
+  const p = tmpFile('creds-fresh.json');
+  fs.writeFileSync(p, JSON.stringify(FRESH_CREDS()));
+  const original = fs.readFileSync(p, 'utf8');
+  const fetchImpl = async () => { throw new Error('should not call'); };
+  const result = await ensureFreshClaudeCredentials(p, { fetchImpl, nowMs: NOW });
+  assert.strictEqual(result.refreshed, false);
+  assert.strictEqual(result.reason, 'fresh');
+  assert.strictEqual(fs.readFileSync(p, 'utf8'), original);
+});
+
+test('ensureFreshClaudeCredentials: stale token triggers refresh and atomic rewrite', async () => {
+  const p = tmpFile('creds-stale.json');
+  fs.writeFileSync(p, JSON.stringify(STALE_CREDS()));
+  const mock = mockFetch({
+    status: 200,
+    body: JSON.stringify({ access_token: 'FRESH', refresh_token: 'FRESH-R', expires_in: 3600 })
+  });
+  const result = await ensureFreshClaudeCredentials(p, { fetchImpl: mock.fetch, nowMs: NOW });
+  assert.strictEqual(result.refreshed, true);
+  assert.strictEqual(result.expiresAt, NOW + 3600_000);
+  const written = JSON.parse(fs.readFileSync(p, 'utf8'));
+  assert.strictEqual(written.claudeAiOauth.accessToken, 'FRESH');
+  assert.strictEqual(written.claudeAiOauth.refreshToken, 'FRESH-R');
+  assert.strictEqual(written.claudeAiOauth.subscriptionType, 'max');
+});
+
+test('ensureFreshClaudeCredentials: failed refresh leaves original file intact', async () => {
+  const p = tmpFile('creds-fail.json');
+  fs.writeFileSync(p, JSON.stringify(STALE_CREDS()));
+  const original = fs.readFileSync(p, 'utf8');
+  const mock = mockFetch({ status: 401, body: '{"error":"invalid_grant"}' });
+  await assert.rejects(
+    ensureFreshClaudeCredentials(p, { fetchImpl: mock.fetch, nowMs: NOW }),
+    /HTTP 401/
+  );
+  assert.strictEqual(fs.readFileSync(p, 'utf8'), original);
+});
+
+test('ensureFreshClaudeCredentials: missing credentials file is a no-op', async () => {
+  const p = path.join(os.tmpdir(), 'pum-creds-missing-' + Date.now() + '.json');
+  const fetchImpl = async () => { throw new Error('should not call'); };
+  const result = await ensureFreshClaudeCredentials(p, { fetchImpl, nowMs: NOW });
+  assert.strictEqual(result.refreshed, false);
+  assert.strictEqual(result.reason, 'no-credentials-file');
+});
+
+test('ensureFreshClaudeCredentials: force=true refreshes even when token is fresh', async () => {
+  const p = tmpFile('creds-force.json');
+  fs.writeFileSync(p, JSON.stringify(FRESH_CREDS()));
+  const mock = mockFetch({
+    status: 200,
+    body: JSON.stringify({ access_token: 'FORCED', expires_in: 3600 })
+  });
+  const result = await ensureFreshClaudeCredentials(p, { fetchImpl: mock.fetch, nowMs: NOW, force: true });
+  assert.strictEqual(result.refreshed, true);
+  const written = JSON.parse(fs.readFileSync(p, 'utf8'));
+  assert.strictEqual(written.claudeAiOauth.accessToken, 'FORCED');
 });

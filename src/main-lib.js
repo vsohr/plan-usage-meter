@@ -1,6 +1,7 @@
 'use strict';
 
 const fs = require('fs');
+const path = require('path');
 
 const CH = Object.freeze({
   USAGE_UPDATE:  'usage:update',
@@ -188,6 +189,110 @@ function pinnedResizeBounds(currentBounds, nextHeight, tolerancePx = 1) {
   };
 }
 
+// --- Claude OAuth token resilience -----------------------------------------
+//
+// The detection module (src/usage/index.js) is read-only by convention: it
+// reads claudeAiOauth.accessToken and sends it to the usage API. It does NOT
+// inspect expiresAt or use refreshToken — when the token expires the API
+// returns HTTP 401 and Claude falls off the meter until something else (the
+// Claude Code CLI itself, on its next request) rewrites the credentials file.
+//
+// To keep this app resilient without editing the locked detection module, the
+// wrapper below performs a preflight refresh: if the token is within
+// CLAUDE_TOKEN_REFRESH_LEEWAY_MS of expiring, we POST to the OAuth token
+// endpoint with the refresh_token grant, atomically rewrite the credentials
+// file (preserving 0600 mode), and let the existing fetchClaudeUsage call
+// proceed with the freshly written access token. On a 401 from the usage API
+// we force a refresh and retry once (handles the case where expiresAt was
+// stale or the server invalidated the token early).
+
+const CLAUDE_OAUTH_TOKEN_URL = 'https://console.anthropic.com/v1/oauth/token';
+const CLAUDE_OAUTH_CLIENT_ID = '9d1c250a-e61b-44d9-88ed-5944d1962f5e';
+const CLAUDE_TOKEN_REFRESH_LEEWAY_MS = 60_000;
+
+function resolveClaudeCredentialsPath() {
+  const home = process.env.CLAUDE_HOME ||
+    path.join(process.env.USERPROFILE || process.env.HOME || '', '.claude');
+  return path.join(home, '.credentials.json');
+}
+
+function isClaudeTokenStale(credentials, nowMs = Date.now(), leewayMs = CLAUDE_TOKEN_REFRESH_LEEWAY_MS) {
+  const oauth = credentials && credentials.claudeAiOauth;
+  if (!oauth || typeof oauth.refreshToken !== 'string' || !oauth.refreshToken) return false;
+  if (typeof oauth.expiresAt !== 'number') return true;
+  return oauth.expiresAt - nowMs <= leewayMs;
+}
+
+async function refreshClaudeOauthCredentials(credentials, { fetchImpl = fetch, nowMs = Date.now() } = {}) {
+  const refreshToken = credentials && credentials.claudeAiOauth && credentials.claudeAiOauth.refreshToken;
+  if (typeof refreshToken !== 'string' || !refreshToken) {
+    throw new Error('Claude refresh token not present');
+  }
+  const res = await fetchImpl(CLAUDE_OAUTH_TOKEN_URL, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+      'anthropic-beta': 'oauth-2025-04-20'
+    },
+    body: JSON.stringify({
+      grant_type: 'refresh_token',
+      refresh_token: refreshToken,
+      client_id: CLAUDE_OAUTH_CLIENT_ID
+    })
+  });
+  if (!res.ok) {
+    let body = '';
+    try { body = await res.text(); } catch { /* ignore */ }
+    const snippet = body ? ` — ${body.slice(0, 200)}` : '';
+    throw new Error(`Claude token refresh failed: HTTP ${res.status}${snippet}`);
+  }
+  const json = await res.json();
+  const accessToken = typeof json.access_token === 'string' ? json.access_token.trim() : '';
+  if (!accessToken) throw new Error('Claude token refresh returned no access_token');
+  const expiresInSec = Number(json.expires_in);
+  const next = { ...credentials };
+  next.claudeAiOauth = {
+    ...credentials.claudeAiOauth,
+    accessToken,
+    expiresAt: nowMs + (Number.isFinite(expiresInSec) ? expiresInSec * 1000 : 60 * 60 * 1000)
+  };
+  if (typeof json.refresh_token === 'string' && json.refresh_token) {
+    next.claudeAiOauth.refreshToken = json.refresh_token.trim();
+  }
+  return next;
+}
+
+async function ensureFreshClaudeCredentials(credentialsPath, options = {}) {
+  const {
+    fsImpl = fs,
+    fetchImpl = fetch,
+    nowMs = Date.now(),
+    force = false
+  } = options;
+  let raw;
+  try {
+    raw = fsImpl.readFileSync(credentialsPath, 'utf8');
+  } catch (err) {
+    if (err && err.code === 'ENOENT') return { refreshed: false, reason: 'no-credentials-file' };
+    throw err;
+  }
+  let credentials;
+  try {
+    credentials = JSON.parse(raw);
+  } catch (err) {
+    throw new Error(`Claude credentials file is not valid JSON: ${err.message}`);
+  }
+  if (!force && !isClaudeTokenStale(credentials, nowMs)) {
+    return { refreshed: false, reason: 'fresh' };
+  }
+  const next = await refreshClaudeOauthCredentials(credentials, { fetchImpl, nowMs });
+  const tmp = `${credentialsPath}.tmp`;
+  fsImpl.writeFileSync(tmp, JSON.stringify(next, null, 2), { mode: 0o600 });
+  fsImpl.renameSync(tmp, credentialsPath);
+  return { refreshed: true, expiresAt: next.claudeAiOauth.expiresAt };
+}
+
 function buildTooltip(usage) {
   const providers = (usage && usage.providers) || {};
   const avail = Object.values(providers).filter((p) => p && p.available);
@@ -213,5 +318,10 @@ module.exports = {
   clampToDisplay,
   selectDefaultDisplay,
   pinnedResizeBounds,
-  buildTooltip
+  buildTooltip,
+  CLAUDE_TOKEN_REFRESH_LEEWAY_MS,
+  resolveClaudeCredentialsPath,
+  isClaudeTokenStale,
+  refreshClaudeOauthCredentials,
+  ensureFreshClaudeCredentials
 };
