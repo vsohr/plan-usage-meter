@@ -19,7 +19,7 @@ npm install
 npm start
 ```
 
-A 340-pixel-wide frameless window appears in the bottom-right corner of your primary display, 16 px from the edges. The tray icon is the persistent affordance — closing the window with X *hides* it; the app keeps polling. Use **tray → Quit** to actually exit.
+A 260-pixel-wide frameless window appears in the bottom-right corner of your primary display, 16 px from the edges. The tray icon is the persistent affordance — closing the window with X *hides* it; the app keeps polling. Use **tray → Quit** to actually exit.
 
 ## Where credentials are read
 

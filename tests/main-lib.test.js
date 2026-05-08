@@ -60,8 +60,8 @@ test('clampToDisplay: missing x or y returns null', () => {
 });
 
 test('clampToDisplay: in-bounds returns identity', () => {
-  const r = clampToDisplay({ x: 100, y: 100, width: 340, height: 200 }, display);
-  assert.deepStrictEqual(r, { x: 100, y: 100, width: 340, height: 200 });
+  const r = clampToDisplay({ x: 100, y: 100, width: 260, height: 200 }, display);
+  assert.deepStrictEqual(r, { x: 100, y: 100, width: 260, height: 200 });
 });
 
 test('clampToDisplay: off-screen left returns null (fallback object)', () => {
@@ -89,14 +89,14 @@ test('clampToDisplay: partial overlap is preserved (kept in bounds via parent fa
   assert.strictEqual(r.y, 1000);
 });
 
-test('clampToDisplay: width forced to 340', () => {
+test('clampToDisplay: width forced to compact expanded meter width', () => {
   const r = clampToDisplay({ x: 50, y: 50, width: 999, height: 200 }, display);
-  assert.strictEqual(r.width, 340);
+  assert.strictEqual(r.width, 260);
 });
 
-test('clampToDisplay: missing height defaults to 200', () => {
+test('clampToDisplay: missing height defaults to compact expanded meter height', () => {
   const r = clampToDisplay({ x: 50, y: 50 }, display);
-  assert.strictEqual(r.height, 200);
+  assert.strictEqual(r.height, 140);
 });
 
 test('clampToDisplay: null display returns null', () => {
@@ -105,10 +105,10 @@ test('clampToDisplay: null display returns null', () => {
 
 test('clampToDisplay: single-display happy path (bottom-right within work area)', () => {
   const r = clampToDisplay(
-    { x: 1564, y: 824, width: 340, height: 200 },
+    { x: 1644, y: 824, width: 260, height: 200 },
     display
   );
-  assert.deepStrictEqual(r, { x: 1564, y: 824, width: 340, height: 200 });
+  assert.deepStrictEqual(r, { x: 1644, y: 824, width: 260, height: 200 });
 });
 
 test('selectDefaultDisplay: picks the rightmost display for first launch', () => {
@@ -130,14 +130,17 @@ test('pinnedResizeBounds: ignores one-pixel resize jitter', () => {
   assert.strictEqual(pinnedResizeBounds({ x: 10, y: 20, height: 300 }, 299), null);
 });
 
-test('pinnedResizeBounds: keeps the current height when content reports smaller', () => {
-  assert.strictEqual(pinnedResizeBounds({ x: 10, y: 20, height: 300 }, 240), null);
+test('pinnedResizeBounds: shrinks while keeping the bottom edge pinned', () => {
+  assert.deepStrictEqual(
+    pinnedResizeBounds({ x: 10, y: 20, height: 300 }, 240),
+    { x: 10, y: 80, width: 260, height: 240 }
+  );
 });
 
 test('pinnedResizeBounds: pins bottom edge for real height changes', () => {
   assert.deepStrictEqual(
     pinnedResizeBounds({ x: 10, y: 20, height: 300 }, 320),
-    { x: 10, y: 0, width: 340, height: 320 }
+    { x: 10, y: 0, width: 260, height: 320 }
   );
 });
 
@@ -337,9 +340,9 @@ test('readJsonSafe: missing file with null defaults returns null', () => {
 
 test('writeJsonAtomic + readJsonSafe round-trip', () => {
   const p = tmpFile('round-trip.json');
-  writeJsonAtomic(p, { x: 100, y: 200, width: 340, height: 180 });
+  writeJsonAtomic(p, { x: 100, y: 200, width: 260, height: 180 });
   const r = readJsonSafe(p, null);
-  assert.deepStrictEqual(r, { x: 100, y: 200, width: 340, height: 180 });
+  assert.deepStrictEqual(r, { x: 100, y: 200, width: 260, height: 180 });
 });
 
 test('readJsonSafe: malformed JSON returns defaults (no throw)', () => {

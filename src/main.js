@@ -8,6 +8,8 @@ const {
   CH,
   AUTO_POLL_INTERVAL_MS,
   PROVIDER_USAGE_CACHE_MS,
+  WINDOW_WIDTH,
+  DEFAULT_WINDOW_HEIGHT,
   runWithTimeout,
   buildAccountUsagePayload,
   buildUnavailableProvider,
@@ -75,7 +77,7 @@ function saveWindowState() {
   if (!win.isVisible()) return;
   try {
     const b = win.getBounds();
-    writeJsonAtomic(windowStatePath, { x: b.x, y: b.y, width: 340, height: b.height });
+    writeJsonAtomic(windowStatePath, { x: b.x, y: b.y, width: WINDOW_WIDTH, height: b.height });
   } catch (err) {
     console.warn('[window-state] save failed:', err.message);
   }
@@ -91,8 +93,8 @@ function scheduleWindowStateSave() {
 
 function defaultBottomRight(work) {
   const margin = 16;
-  const width = 340;
-  const height = 180;
+  const width = WINDOW_WIDTH;
+  const height = DEFAULT_WINDOW_HEIGHT;
   return {
     x: work.x + work.width - width - margin,
     y: work.y + work.height - height - margin,
@@ -110,8 +112,8 @@ function createWindow() {
     const display = screen.getDisplayMatching({
       x: saved.x,
       y: saved.y,
-      width: 340,
-      height: saved.height || 200
+      width: WINDOW_WIDTH,
+      height: saved.height || DEFAULT_WINDOW_HEIGHT
     });
     bounds = clampToDisplay(saved, display);
   }

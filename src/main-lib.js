@@ -19,6 +19,8 @@ const PROVIDER_LABELS = Object.freeze({
 
 const AUTO_POLL_INTERVAL_MS = 10 * 60_000;
 const PROVIDER_USAGE_CACHE_MS = 10 * 60_000;
+const WINDOW_WIDTH = 260;
+const DEFAULT_WINDOW_HEIGHT = 140;
 
 function unavailableLabel(providerName) {
   return PROVIDER_LABELS[providerName] || `${providerName || 'Provider'} --`;
@@ -157,7 +159,7 @@ function writeJsonAtomic(filePath, value) {
   fs.renameSync(tmp, filePath);
 }
 
-function clampToDisplay(state, display, width = 340, fallbackHeight = 200) {
+function clampToDisplay(state, display, width = WINDOW_WIDTH, fallbackHeight = DEFAULT_WINDOW_HEIGHT) {
   if (!state || typeof state.x !== 'number' || typeof state.y !== 'number') return null;
   if (!display || !display.workArea) return null;
   const a = display.workArea;
@@ -180,11 +182,11 @@ function selectDefaultDisplay(displays, primaryDisplay = null) {
 function pinnedResizeBounds(currentBounds, nextHeight, tolerancePx = 1) {
   if (!currentBounds || typeof currentBounds.height !== 'number') return null;
   const height = Math.round(Number(nextHeight) || 0);
-  if (height <= currentBounds.height + tolerancePx) return null;
+  if (Math.abs(height - currentBounds.height) <= tolerancePx) return null;
   return {
     x: currentBounds.x,
     y: currentBounds.y + (currentBounds.height - height),
-    width: 340,
+    width: WINDOW_WIDTH,
     height
   };
 }
@@ -304,6 +306,8 @@ module.exports = {
   CH,
   AUTO_POLL_INTERVAL_MS,
   PROVIDER_USAGE_CACHE_MS,
+  WINDOW_WIDTH,
+  DEFAULT_WINDOW_HEIGHT,
   buildTimeoutPayload,
   buildErrorPayload,
   runWithTimeout,
