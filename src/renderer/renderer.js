@@ -267,6 +267,17 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
+  const expandBtn = document.getElementById('expand');
+  if (expandBtn) {
+    expandBtn.addEventListener('click', (e) => {
+      // Stop the bubble so the #cards click-to-expand handler doesn't double-fire.
+      e.stopPropagation();
+      if (window.api && typeof window.api.setMode === 'function') {
+        window.api.setMode('expanded');
+      }
+    });
+  }
+
   // Click anywhere on the chip body (not the close button in the header)
   // to restore expanded mode. The header's close button stays separate.
   document.getElementById('cards').addEventListener('click', () => {

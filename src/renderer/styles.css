@@ -179,9 +179,15 @@ body.mode-minimal #header {
   background: transparent;
 }
 
+/* Expand button is only meaningful when collapsed; minimise/refresh likewise
+   are only meaningful when expanded. The close (X) button stays visible
+   in both modes so the chip always has an obvious dismiss path. */
+#controls #expand { display: none; }
+
 body.mode-minimal #title-block,
 body.mode-minimal #controls #refresh,
 body.mode-minimal #controls #minimise { display: none; }
+body.mode-minimal #controls #expand { display: inline-block; }
 
 body.mode-minimal #cards {
   padding: 4px 4px 6px;
