@@ -23,16 +23,21 @@ html, body {
 body { overflow: hidden; }
 
 #header {
-  height: 32px;
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 10px;
+  flex-direction: column;
+  padding: 4px 8px 5px 10px;
   -webkit-app-region: drag;
   background: var(--bg);
   border-bottom: 1px solid var(--border);
   border-top-left-radius: var(--radius);
   border-top-right-radius: var(--radius);
+}
+
+#header-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 22px;
 }
 
 #title {
@@ -42,18 +47,12 @@ body { overflow: hidden; }
   white-space: nowrap;
 }
 
-#title-block {
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-}
-
 #refresh-meta {
   color: var(--muted);
-  font-size: 11px;
-  line-height: 1;
+  font-size: 10.5px;
+  line-height: 1.1;
   white-space: nowrap;
+  margin-top: 1px;
 }
 
 #controls {
@@ -178,18 +177,20 @@ body { overflow: hidden; }
    to restore expanded mode. */
 
 body.mode-minimal #header {
-  height: 22px;
   padding: 0 2px 0 4px;
   border-bottom-color: transparent;
   background: transparent;
 }
+
+body.mode-minimal #header-top { height: 22px; }
 
 /* Expand replaces minimise in minimal mode; refresh and close stay put so
    the visible button order is identical across both modes (refresh,
    minimise|expand, close) and the close (X) is always reachable. */
 #controls #expand { display: none; }
 
-body.mode-minimal #title-block,
+body.mode-minimal #title,
+body.mode-minimal #refresh-meta,
 body.mode-minimal #controls #minimise { display: none; }
 body.mode-minimal #controls #expand { display: inline-block; }
 

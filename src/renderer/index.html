@@ -19,16 +19,16 @@
     </defs>
   </svg>
   <header id="header">
-    <div id="title-block">
+    <div id="header-top">
       <span id="title">Plan Usage</span>
-      <span id="refresh-meta">Last -- · Next --</span>
+      <div id="controls">
+        <button id="refresh" type="button" title="Refresh now">&#x21bb;</button>
+        <button id="minimise" type="button" title="Minimise" aria-label="Minimise">&#x2212;</button>
+        <button id="expand" type="button" title="Expand" aria-label="Expand">&#x25a1;</button>
+        <button id="close" type="button" title="Hide window" aria-label="Hide window">&#x2715;</button>
+      </div>
     </div>
-    <div id="controls">
-      <button id="refresh" type="button" title="Refresh now">&#x21bb;</button>
-      <button id="minimise" type="button" title="Minimise" aria-label="Minimise">&#x2212;</button>
-      <button id="expand" type="button" title="Expand" aria-label="Expand">&#x25a1;</button>
-      <button id="close" type="button" title="Hide window" aria-label="Hide window">&#x2715;</button>
-    </div>
+    <span id="refresh-meta">Last -- · Next --</span>
   </header>
   <main id="cards"></main>
   <script src="lib.js"></script>
