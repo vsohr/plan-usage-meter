@@ -109,7 +109,7 @@ function renderExpanded(usage) {
   if (!usage || !usage.providers) {
     const placeholder = el('article', { className: 'card unavailable' });
     const head = el('div', { className: 'head' });
-    head.appendChild(el('span', { className: 'name', text: 'Plan Usage Meter' }));
+    head.appendChild(el('span', { className: 'name', text: 'Plan Usage' }));
     head.appendChild(el('span', { className: 'plan', text: 'loading…' }));
     placeholder.appendChild(head);
     next.appendChild(placeholder);

@@ -23,7 +23,7 @@ html, body {
 body { overflow: hidden; }
 
 #header {
-  height: 40px;
+  height: 32px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -35,18 +35,23 @@ body { overflow: hidden; }
   border-top-right-radius: var(--radius);
 }
 
-#title { font-weight: 600; letter-spacing: 0.2px; }
+#title {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.2px;
+  white-space: nowrap;
+}
 
 #title-block {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 1px;
 }
 
 #refresh-meta {
   color: var(--muted);
-  font-size: 12px;
+  font-size: 11px;
   line-height: 1;
   white-space: nowrap;
 }

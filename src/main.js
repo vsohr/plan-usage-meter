@@ -250,7 +250,7 @@ function createTray() {
     image = nativeImage.createEmpty();
   }
   tray = new Tray(image);
-  tray.setToolTip('Plan Usage Meter');
+  tray.setToolTip('Plan Usage');
   tray.on('click', debounce(toggleWindow, 250));
   rebuildTrayMenu();
 }
