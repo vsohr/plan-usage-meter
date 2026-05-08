@@ -177,9 +177,7 @@ body { overflow: hidden; }
    to restore expanded mode. */
 
 body.mode-minimal #header {
-  padding: 0 2px 0 4px;
-  border-bottom-color: transparent;
-  background: transparent;
+  padding: 0 6px 0 8px;
 }
 
 body.mode-minimal #header-top { height: 22px; }
@@ -193,14 +191,6 @@ body.mode-minimal #title,
 body.mode-minimal #refresh-meta,
 body.mode-minimal #controls #minimise { display: none; }
 body.mode-minimal #controls #expand { display: inline-block; }
-
-/* Three buttons inside the 64-px chip header demand a tighter footprint;
-   font-size shrinks proportionally so hit targets stay legible. */
-body.mode-minimal #controls { gap: 1px; }
-body.mode-minimal #controls button {
-  font-size: 12px;
-  padding: 2px 3px;
-}
 
 body.mode-minimal #cards {
   padding: 4px 4px 6px;
@@ -231,9 +221,9 @@ body.mode-minimal #cards:hover { background: rgba(34, 34, 40, 0.96); }
 .chip-section.unavailable { opacity: 0.55; }
 
 .chip-section .provider-icon {
-  width: 14px;
-  height: 14px;
-  flex: 0 0 14px;
+  width: 17px;
+  height: 17px;
+  flex: 0 0 17px;
 }
 
 .chip-rows {
@@ -269,6 +259,7 @@ body.mode-minimal #cards:hover { background: rgba(34, 34, 40, 0.96); }
   line-height: 1.1;
 }
 
+.chip-percent.ok    { color: var(--green); }
 .chip-percent.warn  { color: var(--amber); }
 .chip-percent.error { color: var(--red); }
 

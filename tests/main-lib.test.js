@@ -545,9 +545,9 @@ test('ensureFreshClaudeCredentials: force=true refreshes even when token is fres
 
 // --- Window mode helpers -----------------------------------------------------
 
-test('window mode widths: expanded is 180, minimal is 64', () => {
+test('window mode widths: expanded is 180, minimal is 96', () => {
   assert.strictEqual(WINDOW_WIDTH_EXPANDED, 180);
-  assert.strictEqual(WINDOW_WIDTH_MINIMAL, 64);
+  assert.strictEqual(WINDOW_WIDTH_MINIMAL, 96);
 });
 
 test('normalizeWindowMode: only "minimal" is honored; everything else is "expanded"', () => {
@@ -561,7 +561,7 @@ test('normalizeWindowMode: only "minimal" is honored; everything else is "expand
 
 test('widthForMode: maps modes to canonical widths', () => {
   assert.strictEqual(widthForMode('expanded'), 180);
-  assert.strictEqual(widthForMode('minimal'), 64);
+  assert.strictEqual(widthForMode('minimal'), 96);
   assert.strictEqual(widthForMode('garbage'), 180);
 });
 
@@ -590,14 +590,14 @@ test('modeResizeBounds: anchors bottom-right when switching modes', () => {
   // Switching to minimal should keep the right and bottom edges.
   const cur = { x: 1724, y: 844, width: 180, height: 180 };
   const next = modeResizeBounds(cur, 'minimal');
-  assert.strictEqual(next.width, 64);
+  assert.strictEqual(next.width, 96);
   assert.strictEqual(next.height, 132);
   assert.strictEqual(next.x + next.width, cur.x + cur.width);
   assert.strictEqual(next.y + next.height, cur.y + cur.height);
 });
 
 test('modeResizeBounds: from minimal back to expanded keeps the corner', () => {
-  const cur = { x: 1840, y: 892, width: 64, height: 132 };
+  const cur = { x: 1808, y: 892, width: 96, height: 132 };
   const next = modeResizeBounds(cur, 'expanded');
   assert.strictEqual(next.width, 180);
   assert.strictEqual(next.height, 180);

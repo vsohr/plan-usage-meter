@@ -126,7 +126,9 @@ function buildChipRow(label, w) {
   row.appendChild(el('span', { className: 'chip-label', text: label }));
 
   const hasPct = w && typeof w.usedPercent === 'number' && Number.isFinite(w.usedPercent);
-  const cls = hasPct ? thresholdClass(w.usedPercent) : '';
+  // thresholdClass returns '' for <65 (its tests assert that). The chip wants
+  // green for the under-threshold band, so map empty → 'ok' here only.
+  const cls = hasPct ? (thresholdClass(w.usedPercent) || 'ok') : '';
   const pctText = hasPct ? `${Math.round(clampPercent(w.usedPercent))}%` : '——';
   row.appendChild(el('span', {
     className: cls ? `chip-percent ${cls}` : 'chip-percent',
