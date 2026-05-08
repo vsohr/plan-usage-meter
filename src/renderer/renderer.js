@@ -3,6 +3,7 @@
 let latestUsage = null;
 let renderRaf = null;
 let refreshInFlight = false;
+let currentMode = 'expanded';
 
 const PROVIDER_DISPLAY_NAMES = {
   claude: 'Claude',
@@ -96,7 +97,7 @@ function buildCard(name, provider) {
   return card;
 }
 
-function renderCards(usage) {
+function renderExpanded(usage) {
   const root = document.getElementById('cards');
   if (!root) return;
   // Build the new DOM tree first, then replace in a single mutation.
@@ -115,6 +116,69 @@ function renderCards(usage) {
     }
   }
   root.replaceChildren(next);
+}
+
+function buildChipRow(label, w) {
+  const row = el('div', { className: 'chip-row' });
+  row.appendChild(el('span', { className: 'chip-label', text: label }));
+
+  const hasPct = w && typeof w.usedPercent === 'number' && Number.isFinite(w.usedPercent);
+  const cls = hasPct ? thresholdClass(w.usedPercent) : '';
+  const pctText = hasPct ? `${Math.round(clampPercent(w.usedPercent))}%` : '——';
+  row.appendChild(el('span', {
+    className: cls ? `chip-percent ${cls}` : 'chip-percent',
+    text: pctText
+  }));
+  return row;
+}
+
+function buildChipSection(providerName, provider) {
+  // Provider slot semantics (src/usage/index.js): primary = 5-hour / Session
+  // window, secondary = 7-day / Weekly window. Both Claude and Codex fill
+  // these slots so the chip layout is symmetric across providers.
+  const available = !!(provider && provider.available === true);
+  const section = el('div', { className: available ? 'chip-section' : 'chip-section unavailable' });
+  if (refreshInFlight) section.classList.add('refreshing');
+
+  const iconMeta = providerIconMeta(providerName);
+  if (iconMeta) {
+    const SVG_NS = 'http://www.w3.org/2000/svg';
+    const span = el('span', { className: iconMeta.className });
+    span.setAttribute('aria-hidden', 'true');
+    const svg = document.createElementNS(SVG_NS, 'svg');
+    const use = document.createElementNS(SVG_NS, 'use');
+    use.setAttribute('href', `#${iconMeta.symbolId}`);
+    svg.appendChild(use);
+    span.appendChild(svg);
+    section.appendChild(span);
+  }
+
+  const rows = el('div', { className: 'chip-rows' });
+  // 5hr on top, weekly below — fixed order regardless of provider.
+  rows.appendChild(buildChipRow('5h', available ? provider.primary   : null));
+  rows.appendChild(buildChipRow('Wk', available ? provider.secondary : null));
+  section.appendChild(rows);
+  return section;
+}
+
+function renderMinimal(usage) {
+  const root = document.getElementById('cards');
+  if (!root) return;
+  const providers = (usage && usage.providers) || {};
+  const chip = el('div', { className: 'chip' });
+
+  chip.appendChild(buildChipSection('claude', providers.claude));
+  chip.appendChild(el('div', { className: 'chip-divider' }));
+  chip.appendChild(buildChipSection('codex',  providers.codex));
+
+  const next = document.createDocumentFragment();
+  next.appendChild(chip);
+  root.replaceChildren(next);
+}
+
+function renderCards(usage) {
+  if (currentMode === 'minimal') renderMinimal(usage);
+  else renderExpanded(usage);
 }
 
 function renderRefreshMeta(usage) {
@@ -148,6 +212,10 @@ function setRefreshSpinning(active) {
   btn.disabled = !!active;
 }
 
+function applyModeClass() {
+  document.body.classList.toggle('mode-minimal', currentMode === 'minimal');
+}
+
 document.addEventListener('DOMContentLoaded', () => {
   if (!window.api) {
     console.warn('[renderer] preload bridge missing');
@@ -160,6 +228,14 @@ document.addEventListener('DOMContentLoaded', () => {
     setRefreshSpinning(false);
     scheduleRender();
   });
+
+  if (typeof window.api.onMode === 'function') {
+    window.api.onMode((mode) => {
+      currentMode = (mode === 'minimal') ? 'minimal' : 'expanded';
+      applyModeClass();
+      scheduleRender();
+    });
+  }
 
   document.getElementById('refresh').addEventListener('click', async () => {
     if (refreshInFlight) return;
@@ -181,6 +257,26 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   document.getElementById('close').addEventListener('click', () => window.api.hide());
+
+  const minimiseBtn = document.getElementById('minimise');
+  if (minimiseBtn) {
+    minimiseBtn.addEventListener('click', () => {
+      if (window.api && typeof window.api.setMode === 'function') {
+        window.api.setMode('minimal');
+      }
+    });
+  }
+
+  // Click anywhere on the chip body (not the close button in the header)
+  // to restore expanded mode. The header's close button stays separate.
+  document.getElementById('cards').addEventListener('click', () => {
+    if (currentMode !== 'minimal') return;
+    if (window.api && typeof window.api.setMode === 'function') {
+      window.api.setMode('expanded');
+    }
+  });
+
+  applyModeClass();
 
   // Relative-time tick: re-render every 30s without re-polling (F2/AC18).
   setInterval(() => { if (latestUsage) scheduleRender(); }, 30_000);

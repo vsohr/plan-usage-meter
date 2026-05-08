@@ -8,8 +8,41 @@ const CH = Object.freeze({
   USAGE_REFRESH: 'usage:refresh',
   WIN_HIDE:      'window:hide',
   APP_QUIT:      'app:quit',
-  WIN_HEIGHT:    'window:report-height'
+  WIN_HEIGHT:    'window:report-height',
+  WIN_MODE_SET:  'window:set-mode',
+  WIN_MODE:      'window:mode'
 });
+
+const WINDOW_WIDTH_EXPANDED = 260;
+const WINDOW_WIDTH_MINIMAL  = 64;
+const WINDOW_HEIGHT_DEFAULT = { expanded: 140, minimal: 132 };
+
+function normalizeWindowMode(value) {
+  return value === 'minimal' ? 'minimal' : 'expanded';
+}
+
+function widthForMode(mode) {
+  return normalizeWindowMode(mode) === 'minimal'
+    ? WINDOW_WIDTH_MINIMAL
+    : WINDOW_WIDTH_EXPANDED;
+}
+
+function defaultHeightForMode(mode) {
+  return WINDOW_HEIGHT_DEFAULT[normalizeWindowMode(mode)];
+}
+
+// Reanchors the bottom-right corner with a new (width, height). Used when the
+// user toggles between expanded and minimal mode: width changes, height resets
+// to a sensible placeholder, and pinnedResizeBounds takes over once the
+// renderer reports its actual content height.
+function modeResizeBounds(currentBounds, mode) {
+  if (!currentBounds) return null;
+  const width = widthForMode(mode);
+  const height = defaultHeightForMode(mode);
+  const right = currentBounds.x + (currentBounds.width || WINDOW_WIDTH_EXPANDED);
+  const bottom = currentBounds.y + (currentBounds.height || height);
+  return { x: right - width, y: bottom - height, width, height };
+}
 
 const PROVIDER_LABELS = Object.freeze({
   codex: 'GPT --',
@@ -19,8 +52,6 @@ const PROVIDER_LABELS = Object.freeze({
 
 const AUTO_POLL_INTERVAL_MS = 10 * 60_000;
 const PROVIDER_USAGE_CACHE_MS = 10 * 60_000;
-const WINDOW_WIDTH = 260;
-const DEFAULT_WINDOW_HEIGHT = 140;
 
 function unavailableLabel(providerName) {
   return PROVIDER_LABELS[providerName] || `${providerName || 'Provider'} --`;
@@ -159,7 +190,7 @@ function writeJsonAtomic(filePath, value) {
   fs.renameSync(tmp, filePath);
 }
 
-function clampToDisplay(state, display, width = WINDOW_WIDTH, fallbackHeight = DEFAULT_WINDOW_HEIGHT) {
+function clampToDisplay(state, display, width = WINDOW_WIDTH_EXPANDED, fallbackHeight = WINDOW_HEIGHT_DEFAULT.expanded) {
   if (!state || typeof state.x !== 'number' || typeof state.y !== 'number') return null;
   if (!display || !display.workArea) return null;
   const a = display.workArea;
@@ -183,10 +214,13 @@ function pinnedResizeBounds(currentBounds, nextHeight, tolerancePx = 1) {
   if (!currentBounds || typeof currentBounds.height !== 'number') return null;
   const height = Math.round(Number(nextHeight) || 0);
   if (Math.abs(height - currentBounds.height) <= tolerancePx) return null;
+  const width = (typeof currentBounds.width === 'number' && currentBounds.width > 0)
+    ? currentBounds.width
+    : WINDOW_WIDTH_EXPANDED;
   return {
     x: currentBounds.x,
     y: currentBounds.y + (currentBounds.height - height),
-    width: WINDOW_WIDTH,
+    width,
     height
   };
 }
@@ -306,8 +340,8 @@ module.exports = {
   CH,
   AUTO_POLL_INTERVAL_MS,
   PROVIDER_USAGE_CACHE_MS,
-  WINDOW_WIDTH,
-  DEFAULT_WINDOW_HEIGHT,
+  WINDOW_WIDTH_EXPANDED,
+  WINDOW_WIDTH_MINIMAL,
   buildTimeoutPayload,
   buildErrorPayload,
   runWithTimeout,
@@ -322,6 +356,10 @@ module.exports = {
   clampToDisplay,
   selectDefaultDisplay,
   pinnedResizeBounds,
+  modeResizeBounds,
+  normalizeWindowMode,
+  widthForMode,
+  defaultHeightForMode,
   buildTooltip,
   CLAUDE_TOKEN_REFRESH_LEEWAY_MS,
   resolveClaudeCredentialsPath,

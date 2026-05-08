@@ -8,8 +8,6 @@ const {
   CH,
   AUTO_POLL_INTERVAL_MS,
   PROVIDER_USAGE_CACHE_MS,
-  WINDOW_WIDTH,
-  DEFAULT_WINDOW_HEIGHT,
   runWithTimeout,
   buildAccountUsagePayload,
   buildUnavailableProvider,
@@ -19,6 +17,10 @@ const {
   clampToDisplay,
   selectDefaultDisplay,
   pinnedResizeBounds,
+  modeResizeBounds,
+  normalizeWindowMode,
+  widthForMode,
+  defaultHeightForMode,
   readJsonSafe,
   writeJsonAtomic,
   buildTooltip,
@@ -45,6 +47,7 @@ let resizeTimer = null;
 let claudeRateLimitedUntil = 0;
 let codexUsageCache = null;
 let claudeUsageCache = null;
+let currentMode = 'expanded';
 
 const CLAUDE_RATE_LIMIT_BACKOFF_MS = 15 * 60_000;
 
@@ -77,7 +80,13 @@ function saveWindowState() {
   if (!win.isVisible()) return;
   try {
     const b = win.getBounds();
-    writeJsonAtomic(windowStatePath, { x: b.x, y: b.y, width: WINDOW_WIDTH, height: b.height });
+    writeJsonAtomic(windowStatePath, {
+      x: b.x,
+      y: b.y,
+      width: b.width,
+      height: b.height,
+      mode: currentMode
+    });
   } catch (err) {
     console.warn('[window-state] save failed:', err.message);
   }
@@ -91,10 +100,10 @@ function scheduleWindowStateSave() {
   }, 500);
 }
 
-function defaultBottomRight(work) {
+function defaultBottomRight(work, mode = 'expanded') {
   const margin = 16;
-  const width = WINDOW_WIDTH;
-  const height = DEFAULT_WINDOW_HEIGHT;
+  const width = widthForMode(mode);
+  const height = defaultHeightForMode(mode);
   return {
     x: work.x + work.width - width - margin,
     y: work.y + work.height - height - margin,
@@ -107,17 +116,19 @@ function createWindow() {
   const defaultDisplay = selectDefaultDisplay(screen.getAllDisplays(), screen.getPrimaryDisplay());
   const work = defaultDisplay.workArea;
   const saved = loadWindowState();
+  currentMode = normalizeWindowMode(saved && saved.mode);
+  const width = widthForMode(currentMode);
   let bounds = null;
   if (saved && typeof saved.x === 'number' && typeof saved.y === 'number') {
     const display = screen.getDisplayMatching({
       x: saved.x,
       y: saved.y,
-      width: WINDOW_WIDTH,
-      height: saved.height || DEFAULT_WINDOW_HEIGHT
+      width,
+      height: saved.height || defaultHeightForMode(currentMode)
     });
-    bounds = clampToDisplay(saved, display);
+    bounds = clampToDisplay(saved, display, width, defaultHeightForMode(currentMode));
   }
-  if (!bounds) bounds = defaultBottomRight(work);
+  if (!bounds) bounds = defaultBottomRight(work, currentMode);
 
   win = new BrowserWindow({
     width: bounds.width,
@@ -141,6 +152,7 @@ function createWindow() {
   if (process.env.PUM_DEVTOOLS === '1') win.webContents.openDevTools({ mode: 'detach' });
   win.once('ready-to-show', () => {
     if (!process.argv.includes('--hidden')) win.show();
+    win.webContents.send(CH.WIN_MODE, currentMode);
     if (latestUsage) win.webContents.send(CH.USAGE_UPDATE, latestUsage);
     scheduleInitialPoll();
   });
@@ -173,6 +185,20 @@ function toggleWindow() {
   else { win.show(); win.focus(); }
 }
 
+function setWindowMode(rawMode) {
+  if (!win || win.isDestroyed()) return;
+  const next = normalizeWindowMode(rawMode);
+  if (next === currentMode) return;
+  currentMode = next;
+  if (resizeTimer) { clearTimeout(resizeTimer); resizeTimer = null; }
+  const cur = win.getBounds();
+  const target = modeResizeBounds(cur, currentMode);
+  if (target) win.setBounds(target, false);
+  win.webContents.send(CH.WIN_MODE, currentMode);
+  scheduleWindowStateSave();
+  rebuildTrayMenu();
+}
+
 function setOpenAtLogin(value) {
   const desired = !!value;
   try {
@@ -192,9 +218,14 @@ function setOpenAtLogin(value) {
 function rebuildTrayMenu() {
   if (!tray || tray.isDestroyed()) return;
   const visible = !!(win && win.isVisible());
+  const minimal = currentMode === 'minimal';
   const template = [
     { label: visible ? 'Hide' : 'Show', click: toggleWindow },
     { label: 'Refresh now', click: () => poll() },
+    {
+      label: minimal ? 'Restore' : 'Minimise',
+      click: () => setWindowMode(minimal ? 'expanded' : 'minimal')
+    },
     { type: 'separator' },
     {
       label: 'Open at login',
@@ -379,6 +410,7 @@ app.whenReady().then(() => {
   });
   ipcMain.on(CH.WIN_HIDE,  () => { if (win) win.hide(); });
   ipcMain.on(CH.APP_QUIT,  () => { app.isQuitting = true; app.quit(); });
+  ipcMain.on(CH.WIN_MODE_SET, (_e, mode) => setWindowMode(mode));
   ipcMain.on(CH.WIN_HEIGHT, (_e, raw) => {
     const px = Math.max(80, Math.min(1200, Math.round(Number(raw) || 0)));
     if (resizeTimer) return;

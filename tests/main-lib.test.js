@@ -9,6 +9,8 @@ const {
   CH,
   AUTO_POLL_INTERVAL_MS,
   PROVIDER_USAGE_CACHE_MS,
+  WINDOW_WIDTH_EXPANDED,
+  WINDOW_WIDTH_MINIMAL,
   buildTimeoutPayload,
   buildErrorPayload,
   runWithTimeout,
@@ -23,6 +25,10 @@ const {
   clampToDisplay,
   selectDefaultDisplay,
   pinnedResizeBounds,
+  modeResizeBounds,
+  normalizeWindowMode,
+  widthForMode,
+  defaultHeightForMode,
   buildTooltip,
   CLAUDE_TOKEN_REFRESH_LEEWAY_MS,
   isClaudeTokenStale,
@@ -40,6 +46,8 @@ test('CH: channel constants exist and are frozen', () => {
   assert.strictEqual(CH.WIN_HIDE, 'window:hide');
   assert.strictEqual(CH.APP_QUIT, 'app:quit');
   assert.strictEqual(CH.WIN_HEIGHT, 'window:report-height');
+  assert.strictEqual(CH.WIN_MODE_SET, 'window:set-mode');
+  assert.strictEqual(CH.WIN_MODE, 'window:mode');
   assert.ok(Object.isFrozen(CH));
 });
 
@@ -533,4 +541,70 @@ test('ensureFreshClaudeCredentials: force=true refreshes even when token is fres
   assert.strictEqual(result.refreshed, true);
   const written = JSON.parse(fs.readFileSync(p, 'utf8'));
   assert.strictEqual(written.claudeAiOauth.accessToken, 'FORCED');
+});
+
+// --- Window mode helpers -----------------------------------------------------
+
+test('window mode widths: expanded is 260, minimal is 64', () => {
+  assert.strictEqual(WINDOW_WIDTH_EXPANDED, 260);
+  assert.strictEqual(WINDOW_WIDTH_MINIMAL, 64);
+});
+
+test('normalizeWindowMode: only "minimal" is honored; everything else is "expanded"', () => {
+  assert.strictEqual(normalizeWindowMode('minimal'), 'minimal');
+  assert.strictEqual(normalizeWindowMode('expanded'), 'expanded');
+  assert.strictEqual(normalizeWindowMode('something-else'), 'expanded');
+  assert.strictEqual(normalizeWindowMode(undefined), 'expanded');
+  assert.strictEqual(normalizeWindowMode(null), 'expanded');
+  assert.strictEqual(normalizeWindowMode(42), 'expanded');
+});
+
+test('widthForMode: maps modes to canonical widths', () => {
+  assert.strictEqual(widthForMode('expanded'), 260);
+  assert.strictEqual(widthForMode('minimal'), 64);
+  assert.strictEqual(widthForMode('garbage'), 260);
+});
+
+test('defaultHeightForMode: provides a placeholder until renderer reports', () => {
+  assert.strictEqual(defaultHeightForMode('expanded'), 140);
+  assert.strictEqual(defaultHeightForMode('minimal'), 132);
+});
+
+test('pinnedResizeBounds: preserves the current width (mode-aware)', () => {
+  assert.deepStrictEqual(
+    pinnedResizeBounds({ x: 10, y: 20, width: 64, height: 132 }, 150),
+    { x: 10, y: 2, width: 64, height: 150 }
+  );
+});
+
+test('pinnedResizeBounds: missing width falls back to expanded width', () => {
+  // Backwards compat: pre-existing tests/state files may lack width.
+  assert.deepStrictEqual(
+    pinnedResizeBounds({ x: 10, y: 20, height: 300 }, 320),
+    { x: 10, y: 0, width: 260, height: 320 }
+  );
+});
+
+test('modeResizeBounds: anchors bottom-right when switching modes', () => {
+  // Window currently expanded at right edge of work area.
+  // Switching to minimal should keep the right and bottom edges.
+  const cur = { x: 1644, y: 884, width: 260, height: 140 };
+  const next = modeResizeBounds(cur, 'minimal');
+  assert.strictEqual(next.width, 64);
+  assert.strictEqual(next.height, 132);
+  assert.strictEqual(next.x + next.width, cur.x + cur.width);
+  assert.strictEqual(next.y + next.height, cur.y + cur.height);
+});
+
+test('modeResizeBounds: from minimal back to expanded keeps the corner', () => {
+  const cur = { x: 1840, y: 892, width: 64, height: 132 };
+  const next = modeResizeBounds(cur, 'expanded');
+  assert.strictEqual(next.width, 260);
+  assert.strictEqual(next.height, 140);
+  assert.strictEqual(next.x + next.width, cur.x + cur.width);
+  assert.strictEqual(next.y + next.height, cur.y + cur.height);
+});
+
+test('modeResizeBounds: null bounds returns null (no-op)', () => {
+  assert.strictEqual(modeResizeBounds(null, 'minimal'), null);
 });

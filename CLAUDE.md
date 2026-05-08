@@ -25,7 +25,7 @@ If `npm start` errors with `Cannot read properties of undefined (reading 'reques
 Three-process Electron app with a strict, locked module boundary:
 
 - **main** ([src/main.js](src/main.js)) owns app lifecycle, the `BrowserWindow`, the `Tray`, the 10-minute polling timer, persistence I/O, single-instance lock, login-item settings, and all `ipcMain` handlers. It imports `./usage` (detection) and `./main-lib` (pure helpers) — nothing from `src/renderer/`.
-- **preload** ([src/preload.js](src/preload.js)) is the *only* bridge. It exposes a frozen `window.api` via `contextBridge` with exactly five methods: `onUsage(cb)`, `refreshNow()`, `hide()`, `quit()`, `reportHeight(px)`. Channel names are duplicated as a frozen `CH` object in both [src/preload.js](src/preload.js) and [src/main-lib.js](src/main-lib.js) — keep them in sync.
+- **preload** ([src/preload.js](src/preload.js)) is the *only* bridge. It exposes a frozen `window.api` via `contextBridge` with seven methods: `onUsage(cb)`, `onMode(cb)`, `refreshNow()`, `setMode(mode)`, `hide()`, `quit()`, `reportHeight(px)`. Channel names are duplicated as a frozen `CH` object in both [src/preload.js](src/preload.js) and [src/main-lib.js](src/main-lib.js) — keep them in sync.
 - **renderer** ([src/renderer/](src/renderer/)) is vanilla JS + plain `<script>` tags (no bundler). It calls only `window.api.*`, never `require()`. It MUST NOT import `src/usage/index.js` — detection lives in main only. CSP in [index.html](src/renderer/index.html) blocks remote script.
 
 ### Data flow (one poll cycle)
@@ -55,7 +55,7 @@ It exports `getAccountUsage()` which probes (in order): Hermes via WSL (`wsl -e 
 Two JSON files in `app.getPath('userData')` (`%APPDATA%/Plan Usage Meter/`):
 
 - `settings.json` — `{ openAtLogin }`. Written via `writeJsonAtomic` (tmp + rename).
-- `window-state.json` — `{ x, y, width: 340, height }`. Written debounced (500ms) on `moved`/`resized`, and on `before-quit`. Width is hard-coded to 340 — never persist user-resized width. On load, `clampToDisplay()` rejects bounds whose target display has gone away (monitor unplugged) and falls back to `defaultBottomRight()`.
+- `window-state.json` — `{ x, y, width, height, mode }`. Written debounced (500ms) on `moved`/`resized`, and on `before-quit`. `mode` is the source of truth for width (`'expanded'` → 260, `'minimal'` → 64) — `widthForMode()` derives it on launch via `normalizeWindowMode()`, which clamps unknown values back to `'expanded'` so older state files (no `mode` key) load as expanded. On load, `clampToDisplay()` rejects bounds whose target display has gone away (monitor unplugged) and falls back to `defaultBottomRight()`.
 
 ### Tray-only lifecycle
 
@@ -66,6 +66,7 @@ Two JSON files in `app.getPath('userData')` (`%APPDATA%/Plan Usage Meter/`):
 - Provider order is locked to `['claude', 'codex']` first, then any other keys ([renderer.js](src/renderer/renderer.js)). Hermes-as-Codex-data shows up under the codex card.
 - Color thresholds in [src/renderer/lib.js](src/renderer/lib.js) `thresholdClass`: <65% none, ≥65% `warn` (amber), ≥85% `error` (red). Mirror this in CSS if changing.
 - Relative-time formatting in [lib.js](src/renderer/lib.js) `formatResetIn` switches to day-grain (`5d`, `5d 3h`) once `≥24h` to avoid unreadable hour counts. Re-rendered every 30s without re-polling providers.
+- Minimal mode (`body.mode-minimal`) collapses the meter to a 64px chip with two stacked sections (Claude on top, Codex below) showing 5-hour over Weekly percentages with the same threshold colors. Both providers' windows map by structural slot (`primary` = 5-hour, `secondary` = Weekly) — stable across providers because [src/usage/index.js](src/usage/index.js) fixes those labels for each. When a provider isn't available its section greys out and shows `——`. The minimise button (#minimise) lives in the header next to refresh; in minimal mode the close button stays visible and the rest of the chip is the click target to expand.
 
 ## Constraints (from SPEC, still binding)
 
@@ -74,7 +75,7 @@ Two JSON files in `app.getPath('userData')` (`%APPDATA%/Plan Usage Meter/`):
 - **No bundler in the renderer** — plain `<script>` tags only.
 - **No new runtime dependencies** without a strong reason. `package.json` currently has zero `dependencies` and only `electron` + `electron-builder` in `devDependencies`.
 - **Tests** use built-in `node:test` only — no Jest, Mocha, or assertion libraries.
-- The 340-pixel width is fixed; do not expose user resize.
+- Window width is fixed per mode (260 expanded, 64 minimal); do not expose user resize. Mode toggling is the only allowed width change and goes through `setWindowMode()` in [src/main.js](src/main.js), which uses `modeResizeBounds()` from [src/main-lib.js](src/main-lib.js) to keep the bottom-right corner anchored across the change.
 
 ## Docs
 
