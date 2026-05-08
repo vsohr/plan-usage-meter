@@ -20,7 +20,14 @@ html, body {
   user-select: none;
 }
 
-body { overflow: hidden; }
+/* The whole window is a drag handle so the user can grab the chip or any
+   card area to move it; #controls overrides this back to no-drag for the
+   buttons (and -webkit-app-region: drag swallows click events on the
+   region itself, which is why the chip body has no click-to-expand). */
+body {
+  overflow: hidden;
+  -webkit-app-region: drag;
+}
 
 #header {
   display: flex;
@@ -195,14 +202,10 @@ body.mode-minimal #controls #expand { display: inline-block; }
 body.mode-minimal #cards {
   padding: 4px 4px 6px;
   gap: 0;
-  cursor: pointer;
   border-top-left-radius: 0;
   border-top-right-radius: 0;
   background: var(--bg);
-  transition: background-color 150ms ease-out;
 }
-
-body.mode-minimal #cards:hover { background: rgba(34, 34, 40, 0.96); }
 
 .chip {
   display: flex;
@@ -212,10 +215,10 @@ body.mode-minimal #cards:hover { background: rgba(34, 34, 40, 0.96); }
 
 .chip-section {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   align-items: center;
-  gap: 3px;
-  padding: 0 2px;
+  gap: 6px;
+  padding: 2px 6px;
 }
 
 .chip-section.unavailable { opacity: 0.55; }
@@ -235,7 +238,7 @@ body.mode-minimal #cards:hover { background: rgba(34, 34, 40, 0.96); }
 
 .chip-row {
   display: flex;
-  justify-content: center;
+  justify-content: flex-start;
   align-items: baseline;
   gap: 4px;
   font-variant-numeric: tabular-nums;
@@ -246,17 +249,17 @@ body.mode-minimal #cards:hover { background: rgba(34, 34, 40, 0.96); }
   font-weight: 600;
   letter-spacing: 0.4px;
   color: var(--muted);
-  min-width: 18px;
-  text-align: right;
+  min-width: 14px;
+  text-align: left;
 }
 
 .chip-percent {
-  font-size: 11.5px;
+  font-size: 12px;
   font-weight: 600;
   color: var(--fg);
-  min-width: 28px;
+  min-width: 30px;
   text-align: left;
-  line-height: 1.1;
+  line-height: 1.15;
 }
 
 .chip-percent.ok    { color: var(--green); }

@@ -55,7 +55,7 @@ It exports `getAccountUsage()` which probes (in order): Hermes via WSL (`wsl -e 
 Two JSON files in `app.getPath('userData')` (`%APPDATA%/Plan Usage Meter/`):
 
 - `settings.json` — `{ openAtLogin }`. Written via `writeJsonAtomic` (tmp + rename).
-- `window-state.json` — `{ x, y, width, height, mode }`. Written debounced (500ms) on `moved`/`resized`, and on `before-quit`. `mode` is the source of truth for width (`'expanded'` → 180, `'minimal'` → 64) — `widthForMode()` derives it on launch via `normalizeWindowMode()`, which clamps unknown values back to `'expanded'` so older state files (no `mode` key) load as expanded. On load, `clampToDisplay()` rejects bounds whose target display has gone away (monitor unplugged) and falls back to `defaultBottomRight()`.
+- `window-state.json` — `{ x, y, width, height, mode }`. Written debounced (500ms) on `moved`/`resized`, and on `before-quit`. `mode` is the source of truth for width (`'expanded'` → 180, `'minimal'` → 96) — `widthForMode()` derives it on launch via `normalizeWindowMode()`, which clamps unknown values back to `'expanded'` so older state files (no `mode` key) load as expanded. On load, `clampToDisplay()` rejects bounds whose target display has gone away (monitor unplugged) and falls back to `defaultBottomRight()`.
 
 ### Tray-only lifecycle
 
@@ -66,7 +66,8 @@ Two JSON files in `app.getPath('userData')` (`%APPDATA%/Plan Usage Meter/`):
 - Provider order is locked to `['claude', 'codex']` first, then any other keys ([renderer.js](src/renderer/renderer.js)). Hermes-as-Codex-data shows up under the codex card.
 - Color thresholds in [src/renderer/lib.js](src/renderer/lib.js) `thresholdClass`: <65% none, ≥65% `warn` (amber), ≥85% `error` (red). Mirror this in CSS if changing.
 - Relative-time formatting in [lib.js](src/renderer/lib.js) `formatResetIn` switches to day-grain (`5d`, `5d 3h`) once `≥24h` to avoid unreadable hour counts. Re-rendered every 30s without re-polling providers.
-- Minimal mode (`body.mode-minimal`) collapses the meter to a 64px chip with two stacked sections (Claude on top, Codex below) showing 5-hour over Weekly percentages with the same threshold colors. Both providers' windows map by structural slot (`primary` = 5-hour, `secondary` = Weekly) — stable across providers because [src/usage/index.js](src/usage/index.js) fixes those labels for each. When a provider isn't available its section greys out and shows `——`. The minimise button (#minimise) lives in the header next to refresh; in minimal mode the close button stays visible and the rest of the chip is the click target to expand.
+- Minimal mode (`body.mode-minimal`) collapses the meter to a 96px chip with two stacked sections (Claude on top, Codex below). Each section is row-flex: 17px provider icon on the left, two right-aligned rows ("5h 22%", "Wk 47%") on the right. Both providers' windows map by structural slot (`primary` = 5-hour, `secondary` = Weekly) — stable across providers because [src/usage/index.js](src/usage/index.js) fixes those labels for each. Chip percentages get the full traffic-light treatment (green <65, amber ≥65, red ≥85) via a chip-only `ok` class so `thresholdClass()` semantics stay unchanged. When a provider isn't available its section greys out and shows `——`. The header keeps `↻` refresh and `✕` close visible in both modes; the toggle button swaps glyphs (`−` minimise in expanded, `□` restore in minimal).
+- The whole window is a drag region (`body { -webkit-app-region: drag }`) so the user can grab any non-button surface — header, card body, or chip — to move it. `#controls` overrides back to `no-drag` for the buttons. There is no click-to-expand on the chip body (drag would swallow click events anyway); the explicit `□` button in the chip header is the affordance.
 
 ## Constraints (from SPEC, still binding)
 
@@ -75,8 +76,8 @@ Two JSON files in `app.getPath('userData')` (`%APPDATA%/Plan Usage Meter/`):
 - **No bundler in the renderer** — plain `<script>` tags only.
 - **No new runtime dependencies** without a strong reason. `package.json` currently has zero `dependencies` and only `electron` + `electron-builder` in `devDependencies`.
 - **Tests** use built-in `node:test` only — no Jest, Mocha, or assertion libraries.
-- Window width is fixed per mode (180 expanded, 64 minimal); do not expose user resize. Mode toggling is the only allowed width change and goes through `setWindowMode()` in [src/main.js](src/main.js), which uses `modeResizeBounds()` from [src/main-lib.js](src/main-lib.js) to keep the bottom-right corner anchored across the change.
+- Window width is fixed per mode (180 expanded, 96 minimal); do not expose user resize. Mode toggling is the only allowed width change and goes through `setWindowMode()` in [src/main.js](src/main.js), which uses `modeResizeBounds()` from [src/main-lib.js](src/main-lib.js) to keep the bottom-right corner anchored across the change.
 
 ## Docs
 
-Detailed design lives in [docs/team/](docs/team/): `SPEC.md` (the what), `ARCHITECTURE.md` (the how), `TASKS.md` (the original build plan), and review/QA artifacts (`CODE-REVIEW.md`, `SECURITY-REVIEW.md`, `VERIFICATION.md`). When changing behavior, check SPEC for intent first — many "obvious improvements" (hide unavailable cards, custom poll intervals, macOS support) are explicit non-goals for v1.
+Detailed design lives in [docs/team/](docs/team/): `SPEC.md` (the what), `ARCHITECTURE.md` (the how), `TASKS.md` (the original build plan), and review/QA artifacts (`CODE-REVIEW.md`, `SECURITY-REVIEW.md`, `VERIFICATION.md`). When changing behavior, check SPEC for intent first — many "obvious improvements" (hide unavailable cards, custom poll intervals, macOS support) are explicit non-goals for v1. Note that those documents are v1 snapshots: dimensions referenced there (340 px expanded) predate the compaction work — current is 180 px expanded / 96 px minimal as documented above.

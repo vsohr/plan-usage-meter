@@ -283,15 +283,6 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // Click anywhere on the chip body (not the close button in the header)
-  // to restore expanded mode. The header's close button stays separate.
-  document.getElementById('cards').addEventListener('click', () => {
-    if (currentMode !== 'minimal') return;
-    if (window.api && typeof window.api.setMode === 'function') {
-      window.api.setMode('expanded');
-    }
-  });
-
   applyModeClass();
 
   // Relative-time tick: re-render every 30s without re-polling (F2/AC18).

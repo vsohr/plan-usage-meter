@@ -567,7 +567,7 @@ test('widthForMode: maps modes to canonical widths', () => {
 
 test('defaultHeightForMode: provides a placeholder until renderer reports', () => {
   assert.strictEqual(defaultHeightForMode('expanded'), 180);
-  assert.strictEqual(defaultHeightForMode('minimal'), 132);
+  assert.strictEqual(defaultHeightForMode('minimal'), 100);
 });
 
 test('pinnedResizeBounds: preserves the current width (mode-aware)', () => {
@@ -591,13 +591,13 @@ test('modeResizeBounds: anchors bottom-right when switching modes', () => {
   const cur = { x: 1724, y: 844, width: 180, height: 180 };
   const next = modeResizeBounds(cur, 'minimal');
   assert.strictEqual(next.width, 96);
-  assert.strictEqual(next.height, 132);
+  assert.strictEqual(next.height, 100);
   assert.strictEqual(next.x + next.width, cur.x + cur.width);
   assert.strictEqual(next.y + next.height, cur.y + cur.height);
 });
 
 test('modeResizeBounds: from minimal back to expanded keeps the corner', () => {
-  const cur = { x: 1808, y: 892, width: 96, height: 132 };
+  const cur = { x: 1808, y: 924, width: 96, height: 100 };
   const next = modeResizeBounds(cur, 'expanded');
   assert.strictEqual(next.width, 180);
   assert.strictEqual(next.height, 180);

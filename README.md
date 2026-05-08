@@ -19,7 +19,7 @@ npm install
 npm start
 ```
 
-A 180-pixel-wide frameless window appears in the bottom-right corner of your primary display, 16 px from the edges. Toggle to a 64-pixel chip via the `⌄` minimise button (`⌃` to expand again). The tray icon is the persistent affordance — closing the window with X *hides* it; the app keeps polling. Use **tray → Quit** to actually exit.
+A 180-pixel-wide frameless window appears in the bottom-right corner of your primary display, 16 px from the edges. Toggle to a 96-pixel chip via the `−` minimise button (`□` to restore). Drag from any non-button surface — the chip itself or any card body works. The tray icon is the persistent affordance — closing the window with X *hides* it; the app keeps polling. Use **tray → Quit** to actually exit.
 
 ## Where credentials are read
 
