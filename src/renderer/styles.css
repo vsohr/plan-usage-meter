@@ -16,18 +16,18 @@ html, body {
   background: transparent;
   color: var(--fg);
   font-family: "Segoe UI", system-ui, Arial, sans-serif;
-  font-size: 11px;
+  font-size: 14px;
   user-select: none;
 }
 
 body { overflow: hidden; }
 
 #header {
-  height: 32px;
+  height: 40px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 8px;
+  padding: 0 10px;
   -webkit-app-region: drag;
   background: var(--bg);
   border-bottom: 1px solid var(--border);
@@ -41,19 +41,19 @@ body { overflow: hidden; }
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 1px;
+  gap: 2px;
 }
 
 #refresh-meta {
   color: var(--muted);
-  font-size: 9.5px;
+  font-size: 12px;
   line-height: 1;
   white-space: nowrap;
 }
 
 #controls {
   display: flex;
-  gap: 2px;
+  gap: 3px;
   -webkit-app-region: no-drag;
 }
 
@@ -62,9 +62,9 @@ body { overflow: hidden; }
   color: var(--fg);
   border: 0;
   cursor: pointer;
-  font-size: 12px;
+  font-size: 16px;
   line-height: 1;
-  padding: 3px 5px;
+  padding: 4px 6px;
   border-radius: 4px;
 }
 
@@ -79,12 +79,12 @@ body { overflow: hidden; }
 
 #cards {
   background: var(--bg);
-  padding: 4px 8px 6px;
+  padding: 6px 10px 8px;
   border-bottom-left-radius: var(--radius);
   border-bottom-right-radius: var(--radius);
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 4px;
   will-change: contents;
 }
 
@@ -92,10 +92,10 @@ body { overflow: hidden; }
   background: var(--bg-card);
   border: 1px solid var(--border);
   border-radius: 6px;
-  padding: 4px 6px;
+  padding: 6px 8px;
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 4px;
 }
 
 .card.unavailable { opacity: 0.55; }
@@ -105,27 +105,27 @@ body { overflow: hidden; }
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 6px;
+  gap: 8px;
   line-height: 1;
 }
 
 .card .name {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: 6px;
   min-width: 0;
   font-weight: 600;
-  font-size: 11.5px;
+  font-size: 15px;
   line-height: 1;
 }
 
 .provider-icon {
-  width: 12px;
-  height: 12px;
+  width: 16px;
+  height: 16px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  flex: 0 0 12px;
+  flex: 0 0 16px;
 }
 
 .provider-icon svg {
@@ -137,14 +137,14 @@ body { overflow: hidden; }
 .icon-claude { color: #d97757; }
 .icon-codex { color: #fff; }
 
-.card .plan { color: var(--muted); font-size: 9.5px; line-height: 1; }
+.card .plan { color: var(--muted); font-size: 12px; line-height: 1; }
 
-.card .row { display: flex; flex-direction: column; gap: 1px; }
-.card .row .label { display: flex; justify-content: space-between; color: var(--muted); font-size: 9.5px; line-height: 1; }
+.card .row { display: flex; flex-direction: column; gap: 2px; }
+.card .row .label { display: flex; justify-content: space-between; color: var(--muted); font-size: 12px; line-height: 1; }
 
 .bar {
   position: relative;
-  height: 2px;
+  height: 3px;
   border-radius: 2px;
   background: rgba(255,255,255,0.06);
   overflow: hidden;
@@ -162,7 +162,7 @@ body { overflow: hidden; }
 .bar.warn  > .fill { background: var(--amber); }
 .bar.error > .fill { background: var(--red); }
 
-.card .message { color: var(--muted); font-size: 9.5px; line-height: 1.2; }
+.card .message { color: var(--muted); font-size: 12px; line-height: 1.3; }
 
 /* --- Minimal mode --------------------------------------------------------- */
 
@@ -173,21 +173,28 @@ body { overflow: hidden; }
    to restore expanded mode. */
 
 body.mode-minimal #header {
-  height: 20px;
-  padding: 0 2px 0 0;
+  height: 22px;
+  padding: 0 2px 0 4px;
   border-bottom-color: transparent;
   background: transparent;
 }
 
-/* Expand button is only meaningful when collapsed; minimise/refresh likewise
-   are only meaningful when expanded. The close (X) button stays visible
-   in both modes so the chip always has an obvious dismiss path. */
+/* Expand replaces minimise in minimal mode; refresh and close stay put so
+   the visible button order is identical across both modes (refresh,
+   minimise|expand, close) and the close (X) is always reachable. */
 #controls #expand { display: none; }
 
 body.mode-minimal #title-block,
-body.mode-minimal #controls #refresh,
 body.mode-minimal #controls #minimise { display: none; }
 body.mode-minimal #controls #expand { display: inline-block; }
+
+/* Three buttons inside the 64-px chip header demand a tighter footprint;
+   font-size shrinks proportionally so hit targets stay legible. */
+body.mode-minimal #controls { gap: 1px; }
+body.mode-minimal #controls button {
+  font-size: 12px;
+  padding: 2px 3px;
+}
 
 body.mode-minimal #cards {
   padding: 4px 4px 6px;

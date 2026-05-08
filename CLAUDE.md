@@ -55,7 +55,7 @@ It exports `getAccountUsage()` which probes (in order): Hermes via WSL (`wsl -e 
 Two JSON files in `app.getPath('userData')` (`%APPDATA%/Plan Usage Meter/`):
 
 - `settings.json` — `{ openAtLogin }`. Written via `writeJsonAtomic` (tmp + rename).
-- `window-state.json` — `{ x, y, width, height, mode }`. Written debounced (500ms) on `moved`/`resized`, and on `before-quit`. `mode` is the source of truth for width (`'expanded'` → 260, `'minimal'` → 64) — `widthForMode()` derives it on launch via `normalizeWindowMode()`, which clamps unknown values back to `'expanded'` so older state files (no `mode` key) load as expanded. On load, `clampToDisplay()` rejects bounds whose target display has gone away (monitor unplugged) and falls back to `defaultBottomRight()`.
+- `window-state.json` — `{ x, y, width, height, mode }`. Written debounced (500ms) on `moved`/`resized`, and on `before-quit`. `mode` is the source of truth for width (`'expanded'` → 180, `'minimal'` → 64) — `widthForMode()` derives it on launch via `normalizeWindowMode()`, which clamps unknown values back to `'expanded'` so older state files (no `mode` key) load as expanded. On load, `clampToDisplay()` rejects bounds whose target display has gone away (monitor unplugged) and falls back to `defaultBottomRight()`.
 
 ### Tray-only lifecycle
 
@@ -75,7 +75,7 @@ Two JSON files in `app.getPath('userData')` (`%APPDATA%/Plan Usage Meter/`):
 - **No bundler in the renderer** — plain `<script>` tags only.
 - **No new runtime dependencies** without a strong reason. `package.json` currently has zero `dependencies` and only `electron` + `electron-builder` in `devDependencies`.
 - **Tests** use built-in `node:test` only — no Jest, Mocha, or assertion libraries.
-- Window width is fixed per mode (260 expanded, 64 minimal); do not expose user resize. Mode toggling is the only allowed width change and goes through `setWindowMode()` in [src/main.js](src/main.js), which uses `modeResizeBounds()` from [src/main-lib.js](src/main-lib.js) to keep the bottom-right corner anchored across the change.
+- Window width is fixed per mode (180 expanded, 64 minimal); do not expose user resize. Mode toggling is the only allowed width change and goes through `setWindowMode()` in [src/main.js](src/main.js), which uses `modeResizeBounds()` from [src/main-lib.js](src/main-lib.js) to keep the bottom-right corner anchored across the change.
 
 ## Docs
 

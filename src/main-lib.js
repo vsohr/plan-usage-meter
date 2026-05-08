@@ -13,9 +13,9 @@ const CH = Object.freeze({
   WIN_MODE:      'window:mode'
 });
 
-const WINDOW_WIDTH_EXPANDED = 260;
+const WINDOW_WIDTH_EXPANDED = 180;
 const WINDOW_WIDTH_MINIMAL  = 64;
-const WINDOW_HEIGHT_DEFAULT = { expanded: 140, minimal: 132 };
+const WINDOW_HEIGHT_DEFAULT = { expanded: 180, minimal: 132 };
 
 function normalizeWindowMode(value) {
   return value === 'minimal' ? 'minimal' : 'expanded';

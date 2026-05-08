@@ -47,7 +47,10 @@ function buildWindowRow(w) {
   if (!w || typeof w.usedPercent !== 'number') return null;
   const pct = Math.round(clampPercent(w.usedPercent));
   const cls = thresholdClass(w.usedPercent);
-  const reset = formatResetIn(w.resetsAt);
+  // formatResetIn returns "resets in 5d 3h" / "resets soon" / "—"; the prefix
+  // is redundant alongside the "Weekly · 47% · ..." context and overflows the
+  // narrower 180-px expanded width — strip it inline so the bare duration shows.
+  const reset = formatResetIn(w.resetsAt).replace(/^resets\s+/, '');
   const pctText = Number.isFinite(w.usedPercent) ? `${pct}%` : '—';
 
   const row = el('div', { className: 'row' });

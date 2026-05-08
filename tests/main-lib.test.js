@@ -68,8 +68,8 @@ test('clampToDisplay: missing x or y returns null', () => {
 });
 
 test('clampToDisplay: in-bounds returns identity', () => {
-  const r = clampToDisplay({ x: 100, y: 100, width: 260, height: 200 }, display);
-  assert.deepStrictEqual(r, { x: 100, y: 100, width: 260, height: 200 });
+  const r = clampToDisplay({ x: 100, y: 100, width: 180, height: 200 }, display);
+  assert.deepStrictEqual(r, { x: 100, y: 100, width: 180, height: 200 });
 });
 
 test('clampToDisplay: off-screen left returns null (fallback object)', () => {
@@ -99,12 +99,12 @@ test('clampToDisplay: partial overlap is preserved (kept in bounds via parent fa
 
 test('clampToDisplay: width forced to compact expanded meter width', () => {
   const r = clampToDisplay({ x: 50, y: 50, width: 999, height: 200 }, display);
-  assert.strictEqual(r.width, 260);
+  assert.strictEqual(r.width, 180);
 });
 
 test('clampToDisplay: missing height defaults to compact expanded meter height', () => {
   const r = clampToDisplay({ x: 50, y: 50 }, display);
-  assert.strictEqual(r.height, 140);
+  assert.strictEqual(r.height, 180);
 });
 
 test('clampToDisplay: null display returns null', () => {
@@ -113,10 +113,10 @@ test('clampToDisplay: null display returns null', () => {
 
 test('clampToDisplay: single-display happy path (bottom-right within work area)', () => {
   const r = clampToDisplay(
-    { x: 1644, y: 824, width: 260, height: 200 },
+    { x: 1724, y: 824, width: 180, height: 200 },
     display
   );
-  assert.deepStrictEqual(r, { x: 1644, y: 824, width: 260, height: 200 });
+  assert.deepStrictEqual(r, { x: 1724, y: 824, width: 180, height: 200 });
 });
 
 test('selectDefaultDisplay: picks the rightmost display for first launch', () => {
@@ -141,14 +141,14 @@ test('pinnedResizeBounds: ignores one-pixel resize jitter', () => {
 test('pinnedResizeBounds: shrinks while keeping the bottom edge pinned', () => {
   assert.deepStrictEqual(
     pinnedResizeBounds({ x: 10, y: 20, height: 300 }, 240),
-    { x: 10, y: 80, width: 260, height: 240 }
+    { x: 10, y: 80, width: 180, height: 240 }
   );
 });
 
 test('pinnedResizeBounds: pins bottom edge for real height changes', () => {
   assert.deepStrictEqual(
     pinnedResizeBounds({ x: 10, y: 20, height: 300 }, 320),
-    { x: 10, y: 0, width: 260, height: 320 }
+    { x: 10, y: 0, width: 180, height: 320 }
   );
 });
 
@@ -348,9 +348,9 @@ test('readJsonSafe: missing file with null defaults returns null', () => {
 
 test('writeJsonAtomic + readJsonSafe round-trip', () => {
   const p = tmpFile('round-trip.json');
-  writeJsonAtomic(p, { x: 100, y: 200, width: 260, height: 180 });
+  writeJsonAtomic(p, { x: 100, y: 200, width: 180, height: 180 });
   const r = readJsonSafe(p, null);
-  assert.deepStrictEqual(r, { x: 100, y: 200, width: 260, height: 180 });
+  assert.deepStrictEqual(r, { x: 100, y: 200, width: 180, height: 180 });
 });
 
 test('readJsonSafe: malformed JSON returns defaults (no throw)', () => {
@@ -545,8 +545,8 @@ test('ensureFreshClaudeCredentials: force=true refreshes even when token is fres
 
 // --- Window mode helpers -----------------------------------------------------
 
-test('window mode widths: expanded is 260, minimal is 64', () => {
-  assert.strictEqual(WINDOW_WIDTH_EXPANDED, 260);
+test('window mode widths: expanded is 180, minimal is 64', () => {
+  assert.strictEqual(WINDOW_WIDTH_EXPANDED, 180);
   assert.strictEqual(WINDOW_WIDTH_MINIMAL, 64);
 });
 
@@ -560,13 +560,13 @@ test('normalizeWindowMode: only "minimal" is honored; everything else is "expand
 });
 
 test('widthForMode: maps modes to canonical widths', () => {
-  assert.strictEqual(widthForMode('expanded'), 260);
+  assert.strictEqual(widthForMode('expanded'), 180);
   assert.strictEqual(widthForMode('minimal'), 64);
-  assert.strictEqual(widthForMode('garbage'), 260);
+  assert.strictEqual(widthForMode('garbage'), 180);
 });
 
 test('defaultHeightForMode: provides a placeholder until renderer reports', () => {
-  assert.strictEqual(defaultHeightForMode('expanded'), 140);
+  assert.strictEqual(defaultHeightForMode('expanded'), 180);
   assert.strictEqual(defaultHeightForMode('minimal'), 132);
 });
 
@@ -581,14 +581,14 @@ test('pinnedResizeBounds: missing width falls back to expanded width', () => {
   // Backwards compat: pre-existing tests/state files may lack width.
   assert.deepStrictEqual(
     pinnedResizeBounds({ x: 10, y: 20, height: 300 }, 320),
-    { x: 10, y: 0, width: 260, height: 320 }
+    { x: 10, y: 0, width: 180, height: 320 }
   );
 });
 
 test('modeResizeBounds: anchors bottom-right when switching modes', () => {
   // Window currently expanded at right edge of work area.
   // Switching to minimal should keep the right and bottom edges.
-  const cur = { x: 1644, y: 884, width: 260, height: 140 };
+  const cur = { x: 1724, y: 844, width: 180, height: 180 };
   const next = modeResizeBounds(cur, 'minimal');
   assert.strictEqual(next.width, 64);
   assert.strictEqual(next.height, 132);
@@ -599,8 +599,8 @@ test('modeResizeBounds: anchors bottom-right when switching modes', () => {
 test('modeResizeBounds: from minimal back to expanded keeps the corner', () => {
   const cur = { x: 1840, y: 892, width: 64, height: 132 };
   const next = modeResizeBounds(cur, 'expanded');
-  assert.strictEqual(next.width, 260);
-  assert.strictEqual(next.height, 140);
+  assert.strictEqual(next.width, 180);
+  assert.strictEqual(next.height, 180);
   assert.strictEqual(next.x + next.width, cur.x + cur.width);
   assert.strictEqual(next.y + next.height, cur.y + cur.height);
 });
