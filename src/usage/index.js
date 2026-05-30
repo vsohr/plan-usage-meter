@@ -8,6 +8,8 @@ const CODEX_HOME = process.env.CODEX_HOME || DEFAULT_CODEX_HOME;
 const CODEX_SESSIONS_DIR = path.join(CODEX_HOME, 'sessions');
 const CLAUDE_HOME = process.env.CLAUDE_HOME || path.join(process.env.USERPROFILE || process.env.HOME || '', '.claude');
 const CLAUDE_CREDENTIALS_PATH = path.join(CLAUDE_HOME, '.credentials.json');
+const CLAUDE_STATUSLINE_RATE_LIMITS_PATH = path.join(CLAUDE_HOME, 'plan-usage-meter-claude-rate-limits.json');
+const CLAUDE_STATUSLINE_RATE_LIMITS_MAX_AGE_MS = 15 * 60_000;
 const HERMES_TIMEOUT_MS = 15_000;
 
 function titleCaseSlug(value) {
@@ -125,7 +127,44 @@ function normalizeClaudeWindow(window, label) {
   };
 }
 
-async function fetchClaudeUsage(credentialsPath = CLAUDE_CREDENTIALS_PATH) {
+function normalizeClaudeStatuslineWindow(window, label) {
+  if (!window) return null;
+  const usedPercent = typeof window.used_percentage === 'number' ? window.used_percentage
+    : typeof window.usedPercent === 'number' ? window.usedPercent
+    : typeof window.utilization === 'number' ? window.utilization
+    : null;
+  if (usedPercent === null) return null;
+  return {
+    label,
+    usedPercent,
+    windowMinutes: null,
+    resetsAt: parseDate(window.resets_at ?? window.resetsAt ?? window.reset_at)
+  };
+}
+
+function readClaudeStatuslineRateLimits({
+  cachePath = CLAUDE_STATUSLINE_RATE_LIMITS_PATH,
+  nowMs = Date.now(),
+  maxAgeMs = CLAUDE_STATUSLINE_RATE_LIMITS_MAX_AGE_MS
+} = {}) {
+  const cache = readJson(cachePath);
+  if (!cache || typeof cache.savedAt !== 'number') return null;
+  if (nowMs - cache.savedAt > maxAgeMs) return null;
+  const rateLimits = cache.rate_limits || cache.rateLimits || {};
+  return {
+    primary: normalizeClaudeStatuslineWindow(rateLimits.five_hour, 'Session'),
+    secondary: normalizeClaudeStatuslineWindow(rateLimits.seven_day, 'Weekly')
+  };
+}
+
+function preferStatuslineWhenApiIsEmpty(apiWindow, statuslineWindow) {
+  if (!statuslineWindow) return apiWindow;
+  if (!apiWindow) return statuslineWindow;
+  if (apiWindow.usedPercent === 0 && statuslineWindow.usedPercent > 0) return statuslineWindow;
+  return apiWindow;
+}
+
+async function fetchClaudeUsage(credentialsPath = CLAUDE_CREDENTIALS_PATH, options = {}) {
   const credentials = readJson(credentialsPath);
   const oauth = credentials?.claudeAiOauth;
   const accessToken = typeof oauth?.accessToken === 'string' ? oauth.accessToken.trim() : '';
@@ -139,8 +178,19 @@ async function fetchClaudeUsage(credentialsPath = CLAUDE_CREDENTIALS_PATH) {
     'User-Agent': 'claude-code/2.1.0'
   });
 
-  const primary = normalizeClaudeWindow(payload.five_hour, 'Session');
-  const secondary = normalizeClaudeWindow(payload.seven_day, 'Weekly');
+  const statusline = readClaudeStatuslineRateLimits({
+    cachePath: options.statuslineCachePath,
+    nowMs: options.nowMs,
+    maxAgeMs: options.statuslineMaxAgeMs
+  });
+  const primary = preferStatuslineWhenApiIsEmpty(
+    normalizeClaudeWindow(payload.five_hour, 'Session'),
+    statusline?.primary
+  );
+  const secondary = preferStatuslineWhenApiIsEmpty(
+    normalizeClaudeWindow(payload.seven_day, 'Weekly'),
+    statusline?.secondary
+  );
   const details = [];
   for (const [key, label] of [
     ['seven_day_opus', 'Opus weekly'],

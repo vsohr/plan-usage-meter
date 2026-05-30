@@ -1,6 +1,7 @@
 {
   "name": "plan-usage-meter",
   "version": "0.1.0",
+  "desktopName": "plan-usage-meter.desktop",
   "description": "Always-on-top desktop widget for Claude / Codex / Hermes plan-usage quotas.",
   "main": "src/main.js",
   "private": true,

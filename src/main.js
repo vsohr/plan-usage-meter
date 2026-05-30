@@ -28,6 +28,29 @@ const {
   ensureFreshClaudeCredentials
 } = require('./main-lib');
 
+const ASSETS_DIR = path.join(__dirname, '..', 'assets');
+const APP_ICON_PATH = path.join(ASSETS_DIR, process.platform === 'win32' ? 'icon.ico' : 'app-icon.png');
+const TRAY_ICON_PATH = path.join(ASSETS_DIR, 'tray.png');
+
+// Linux display / app-id / sandbox tuning (no-ops on Windows/macOS).
+if (process.platform === 'linux') {
+  // Prefer the session's native display backend. On a Wayland session this is
+  // KWin/Wayland, where Chromium's surface is composited directly and reliably.
+  // XWayland on NVIDIA is broken for this window every way tried: native GL
+  // segfaults the GPU process in a loop, and software/ANGLE paths never get a
+  // real top-level X11 window (handle resolves to 0x1) so KWin never shows it.
+  // On an X11 session this hint resolves to X11, where the app's own positioning
+  // and always-on-top work natively.
+  app.commandLine.appendSwitch('ozone-platform-hint', 'auto');
+  // Pin a stable Wayland app-id / X11 WM_CLASS ("plan-usage-meter") regardless of
+  // the display name, so the KWin window rule and the .desktop StartupWMClass
+  // match this window reliably (KWin uses app-id to apply rules + resolve icons).
+  app.commandLine.appendSwitch('class', 'plan-usage-meter');
+  // chrome-sandbox isn't setuid-root here and we can't elevate unattended; the
+  // unprivileged user-namespace sandbox stays active.
+  app.commandLine.appendSwitch('disable-setuid-sandbox');
+}
+
 const CLAUDE_CREDENTIALS_PATH = resolveClaudeCredentialsPath();
 
 if (!app.requestSingleInstanceLock()) {
@@ -135,8 +158,15 @@ function createWindow() {
     height: bounds.height,
     x: bounds.x,
     y: bounds.y,
+    icon: APP_ICON_PATH,
     frame: false,
-    transparent: true,
+    // On Linux/NVIDIA under XWayland, a transparent + software-rendered surface
+    // paints (capturePage sees it) but is never composited on screen — it maps as
+    // an unmanaged override-redirect window KWin won't show. An opaque window is
+    // WM-managed and composites normally. The solid backing matches --bg, so the
+    // only visible change is that the rounded corners are no longer see-through.
+    transparent: process.platform !== 'linux',
+    backgroundColor: process.platform === 'linux' ? '#141418' : undefined,
     resizable: false,
     alwaysOnTop: true,
     skipTaskbar: true,
@@ -240,10 +270,9 @@ function rebuildTrayMenu() {
 }
 
 function createTray() {
-  const trayPath = path.join(__dirname, '..', 'assets', 'tray.png');
   let image;
   try {
-    image = nativeImage.createFromPath(trayPath);
+    image = nativeImage.createFromPath(TRAY_ICON_PATH);
     if (image.isEmpty()) throw new Error('tray.png decoded to empty image');
   } catch (err) {
     console.warn('[tray] failed to load icon:', err.message);
