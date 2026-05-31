@@ -52,11 +52,12 @@ function buildWindowRow(w) {
   // narrower 180-px expanded width — strip it inline so the bare duration shows.
   const reset = formatResetIn(w.resetsAt).replace(/^resets\s+/, '');
   const pctText = Number.isFinite(w.usedPercent) ? `${pct}%` : '—';
+  const detailText = formatWindowDetail(pctText, reset);
 
   const row = el('div', { className: 'row' });
   const label = el('div', { className: 'label' });
   label.appendChild(el('span', { text: w.label || 'Usage' }));
-  label.appendChild(el('span', { text: `${pctText} · ${reset}` }));
+  label.appendChild(el('span', { text: detailText }));
   const bar = el('div', { className: cls ? `bar ${cls}` : 'bar' });
   const fill = el('div', { className: 'fill' });
   fill.style.width = `${pct}%`;

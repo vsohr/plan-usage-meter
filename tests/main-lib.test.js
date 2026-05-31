@@ -30,6 +30,7 @@ const {
   widthForMode,
   defaultHeightForMode,
   buildTooltip,
+  backfillClaudePrimaryReset,
   CLAUDE_TOKEN_REFRESH_LEEWAY_MS,
   isClaudeTokenStale,
   refreshClaudeOauthCredentials,
@@ -607,4 +608,91 @@ test('modeResizeBounds: from minimal back to expanded keeps the corner', () => {
 
 test('modeResizeBounds: null bounds returns null (no-op)', () => {
   assert.strictEqual(modeResizeBounds(null, 'minimal'), null);
+});
+
+// --- backfillClaudePrimaryReset ---------------------------------------------
+
+const IDLE_NOW = Date.parse('2026-05-31T13:00:00.000Z');
+const IDLE_FUTURE_SEC = Math.floor(Date.parse('2026-05-31T18:00:00.000Z') / 1000);
+
+function statuslineCache(extra = {}, fiveHour = { used_percentage: 0, resets_at: IDLE_FUTURE_SEC }) {
+  const p = tmpFile('rate-limits.json');
+  fs.writeFileSync(p, JSON.stringify({ savedAt: IDLE_NOW - 1000, rate_limits: { five_hour: fiveHour }, ...extra }));
+  return p;
+}
+
+test('backfillClaudePrimaryReset: fills a missing anchor from a fresh cache', () => {
+  const provider = { available: true, primary: { label: 'Session', usedPercent: 0, resetsAt: null } };
+  const out = backfillClaudePrimaryReset(provider, { cachePath: statuslineCache(), nowMs: IDLE_NOW });
+  assert.strictEqual(out.primary.resetsAt, '2026-05-31T18:00:00.000Z');
+  assert.strictEqual(out.primary.usedPercent, 0); // percent untouched
+});
+
+test('backfillClaudePrimaryReset: leaves an existing anchor alone', () => {
+  const provider = { primary: { label: 'Session', usedPercent: 5, resetsAt: '2026-05-31T17:00:00.000Z' } };
+  const out = backfillClaudePrimaryReset(provider, { cachePath: statuslineCache(), nowMs: IDLE_NOW });
+  assert.strictEqual(out.primary.resetsAt, '2026-05-31T17:00:00.000Z');
+});
+
+test('backfillClaudePrimaryReset: ignores a stale cache', () => {
+  const p = tmpFile('stale.json');
+  fs.writeFileSync(p, JSON.stringify({ savedAt: IDLE_NOW - 16 * 60_000, rate_limits: { five_hour: { resets_at: IDLE_FUTURE_SEC } } }));
+  const provider = { primary: { usedPercent: 0, resetsAt: null } };
+  const out = backfillClaudePrimaryReset(provider, { cachePath: p, nowMs: IDLE_NOW });
+  assert.strictEqual(out.primary.resetsAt, null);
+});
+
+test('backfillClaudePrimaryReset: ignores an expired anchor', () => {
+  const pastSec = Math.floor((IDLE_NOW - 60_000) / 1000);
+  const p = statuslineCache({}, { resets_at: pastSec });
+  const provider = { primary: { usedPercent: 0, resetsAt: null } };
+  const out = backfillClaudePrimaryReset(provider, { cachePath: p, nowMs: IDLE_NOW });
+  assert.strictEqual(out.primary.resetsAt, null);
+});
+
+test('backfillClaudePrimaryReset: missing cache file is a no-op', () => {
+  const provider = { primary: { usedPercent: 0, resetsAt: null } };
+  const out = backfillClaudePrimaryReset(provider, { cachePath: tmpFile('nope.json'), nowMs: IDLE_NOW });
+  assert.strictEqual(out.primary.resetsAt, null);
+});
+
+test('backfillClaudePrimaryReset: no primary window is a no-op', () => {
+  const provider = { available: false };
+  assert.strictEqual(backfillClaudePrimaryReset(provider, { cachePath: statuslineCache(), nowMs: IDLE_NOW }), provider);
+});
+
+test('backfillClaudePrimaryReset: reads camelCase rateLimits/resetsAt fallback keys', () => {
+  const p = tmpFile('camel.json');
+  fs.writeFileSync(p, JSON.stringify({ savedAt: IDLE_NOW - 1000, rateLimits: { five_hour: { resetsAt: IDLE_FUTURE_SEC } } }));
+  const out = backfillClaudePrimaryReset({ primary: { usedPercent: 0, resetsAt: null } }, { cachePath: p, nowMs: IDLE_NOW });
+  assert.strictEqual(out.primary.resetsAt, '2026-05-31T18:00:00.000Z');
+});
+
+test('backfillClaudePrimaryReset: accepts an ISO-string anchor (mirrors detector parseDate)', () => {
+  const p = statuslineCache({}, { reset_at: '2026-05-31T18:00:00.000Z' });
+  const out = backfillClaudePrimaryReset({ primary: { usedPercent: 0, resetsAt: null } }, { cachePath: p, nowMs: IDLE_NOW });
+  assert.strictEqual(out.primary.resetsAt, '2026-05-31T18:00:00.000Z');
+});
+
+test('backfillClaudePrimaryReset: non-number, non-string anchor is a no-op', () => {
+  const p = statuslineCache({}, { used_percentage: 30, resets_at: { nested: 1 } });
+  const out = backfillClaudePrimaryReset({ primary: { usedPercent: 0, resetsAt: null } }, { cachePath: p, nowMs: IDLE_NOW });
+  assert.strictEqual(out.primary.resetsAt, null);
+});
+
+test('backfillClaudePrimaryReset: malformed JSON is a no-op', () => {
+  const p = tmpFile('broken.json');
+  fs.writeFileSync(p, '{ not valid json');
+  const out = backfillClaudePrimaryReset({ primary: { usedPercent: 0, resetsAt: null } }, { cachePath: p, nowMs: IDLE_NOW });
+  assert.strictEqual(out.primary.resetsAt, null);
+});
+
+test('backfillClaudePrimaryReset: does not mutate the input provider', () => {
+  const primary = { label: 'Session', usedPercent: 0, resetsAt: null };
+  const provider = { available: true, primary };
+  const out = backfillClaudePrimaryReset(provider, { cachePath: statuslineCache(), nowMs: IDLE_NOW });
+  assert.strictEqual(primary.resetsAt, null);     // original untouched
+  assert.notStrictEqual(out, provider);
+  assert.notStrictEqual(out.primary, primary);
+  assert.strictEqual(out.primary.resetsAt, '2026-05-31T18:00:00.000Z');
 });

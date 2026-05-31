@@ -38,6 +38,14 @@ function formatResetIn(isoString, now) {
   return `resets in ${hours}h ${rem}m`;
 }
 
+function formatWindowDetail(pctText, resetText) {
+  // resetText is formatResetIn(...) with its "resets " prefix already stripped;
+  // it is the em-dash when there's no usable reset anchor (e.g. Claude's idle 5h
+  // window, which the API reports as {0, null}). Drop the dangling "· —" then so
+  // the row reads "Session 0%" instead of "Session 0% · —", which looked broken.
+  return resetText === '—' ? pctText : `${pctText} · ${resetText}`;
+}
+
 function formatClockTime(isoString) {
   const t = Date.parse(isoString);
   if (!Number.isFinite(t)) return '--';
@@ -62,5 +70,5 @@ function providerIconMeta(providerName) {
 }
 
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { thresholdClass, clampPercent, formatResetIn, formatRefreshMeta, providerIconMeta };
+  module.exports = { thresholdClass, clampPercent, formatResetIn, formatWindowDetail, formatRefreshMeta, providerIconMeta };
 }

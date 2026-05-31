@@ -5,6 +5,7 @@ const {
   thresholdClass,
   clampPercent,
   formatResetIn,
+  formatWindowDetail,
   formatRefreshMeta,
   providerIconMeta
 } = require('../src/renderer/lib');
@@ -148,4 +149,16 @@ test('formatRefreshMeta: shows last and next refresh times', () => {
 test('formatRefreshMeta: missing or invalid times fall back cleanly', () => {
   assert.strictEqual(formatRefreshMeta(null), 'Last -- · Next --');
   assert.strictEqual(formatRefreshMeta({ updatedAt: 'not-a-date' }), 'Last -- · Next --');
+});
+
+// --- formatWindowDetail ------------------------------------------------------
+
+test('formatWindowDetail: joins percent and reset with a middot', () => {
+  assert.strictEqual(formatWindowDetail('22%', 'in 3h 12m'), '22% · in 3h 12m');
+  assert.strictEqual(formatWindowDetail('0%', 'soon'), '0% · soon');
+});
+
+test('formatWindowDetail: drops the dangling middot when there is no anchor', () => {
+  assert.strictEqual(formatWindowDetail('0%', EM_DASH), '0%');
+  assert.strictEqual(formatWindowDetail('—', EM_DASH), '—');
 });

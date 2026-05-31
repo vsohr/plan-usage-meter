@@ -329,6 +329,63 @@ async function ensureFreshClaudeCredentials(credentialsPath, options = {}) {
   return { refreshed: true, expiresAt: next.claudeAiOauth.expiresAt };
 }
 
+// MIRRORED from the read-only detection module src/usage/index.js
+// (CLAUDE_STATUSLINE_RATE_LIMITS_PATH / _MAX_AGE_MS near its top, and the
+// readClaudeStatuslineRateLimits cache shape). That module can't be edited or
+// imported-from here by convention, so the filename, 15-min max-age, and the
+// {savedAt, rate_limits.five_hour.resets_at} shape are duplicated below — keep
+// them in sync if the upstream copy drifts.
+const CLAUDE_STATUSLINE_RATE_LIMITS_FILE = 'plan-usage-meter-claude-rate-limits.json';
+const CLAUDE_STATUSLINE_RATE_LIMITS_MAX_AGE_MS = 15 * 60_000;
+
+function resolveClaudeStatuslineRateLimitsPath() {
+  const home = process.env.CLAUDE_HOME ||
+    path.join(process.env.USERPROFILE || process.env.HOME || '', '.claude');
+  return path.join(home, CLAUDE_STATUSLINE_RATE_LIMITS_FILE);
+}
+
+// Convert a statusline-cache reset value to epoch ms, mirroring the detector's
+// parseDate: a number is epoch SECONDS; a string is a parseable date. Returns
+// NaN for anything else so callers guard with Number.isFinite.
+function statuslineResetToMs(value) {
+  if (typeof value === 'number') return value * 1000;
+  if (typeof value === 'string' && value.trim() !== '') return Date.parse(value);
+  return NaN;
+}
+
+// Claude's usage API drops the 5-hour window to {utilization: 0, resets_at: null}
+// when no session is active, so the meter loses its reset countdown and the row
+// reads "Session 0% · —" — looks broken next to Codex's "7% · in 2h 13m". The
+// detector's own preferStatuslineWhenApiIsEmpty only swaps in the statusline
+// window when its percent is > 0, so the idle-at-zero case keeps the API's null
+// anchor. Fill exactly that gap: copy a fresh, still-future reset anchor from
+// the same statusline cache the detector consults. Detection is read-only
+// (src/usage); this post-processes its output in the allowed layer.
+function backfillClaudePrimaryReset(provider, {
+  cachePath = resolveClaudeStatuslineRateLimitsPath(),
+  nowMs = Date.now(),
+  maxAgeMs = CLAUDE_STATUSLINE_RATE_LIMITS_MAX_AGE_MS,
+  fsImpl = fs
+} = {}) {
+  const primary = provider && provider.primary;
+  if (!primary || primary.resetsAt) return provider; // only fill a missing anchor
+  let cache;
+  try {
+    cache = JSON.parse(fsImpl.readFileSync(cachePath, 'utf8'));
+  } catch {
+    return provider; // no/unreadable cache → nothing to backfill
+  }
+  if (!cache || typeof cache.savedAt !== 'number') return provider;
+  if (nowMs - cache.savedAt > maxAgeMs) return provider; // stale cache, don't trust it
+  const rateLimits = cache.rate_limits || cache.rateLimits || {};
+  const fiveHour = rateLimits.five_hour || {};
+  const resetsAtMs = statuslineResetToMs(fiveHour.resets_at ?? fiveHour.resetsAt ?? fiveHour.reset_at);
+  // Skip an unparseable or already-expired anchor — a past anchor would render
+  // as "resets soon" and a fresh poll will supply a real one anyway.
+  if (!Number.isFinite(resetsAtMs) || resetsAtMs <= nowMs) return provider;
+  return { ...provider, primary: { ...primary, resetsAt: new Date(resetsAtMs).toISOString() } };
+}
+
 function buildTooltip(usage) {
   const providers = (usage && usage.providers) || {};
   const avail = Object.values(providers).filter((p) => p && p.available);
@@ -361,6 +418,8 @@ module.exports = {
   widthForMode,
   defaultHeightForMode,
   buildTooltip,
+  backfillClaudePrimaryReset,
+  resolveClaudeStatuslineRateLimitsPath,
   CLAUDE_TOKEN_REFRESH_LEEWAY_MS,
   resolveClaudeCredentialsPath,
   isClaudeTokenStale,

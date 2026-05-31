@@ -24,6 +24,7 @@ const {
   readJsonSafe,
   writeJsonAtomic,
   buildTooltip,
+  backfillClaudePrimaryReset,
   resolveClaudeCredentialsPath,
   ensureFreshClaudeCredentials
 } = require('./main-lib');
@@ -329,7 +330,7 @@ async function getClaudeProvider(nowMs) {
   await preflightClaudeRefresh();
 
   try {
-    const provider = await fetchClaudeUsage();
+    const provider = backfillClaudePrimaryReset(await fetchClaudeUsage());
     if (provider?.available) {
       claudeUsageCache = { provider, savedAtMs: Date.now() };
       claudeRateLimitedUntil = 0;
@@ -340,7 +341,7 @@ async function getClaudeProvider(nowMs) {
       const refresh = await preflightClaudeRefresh({ force: true });
       if (refresh.refreshed) {
         try {
-          const provider = await fetchClaudeUsage();
+          const provider = backfillClaudePrimaryReset(await fetchClaudeUsage());
           if (provider?.available) {
             claudeUsageCache = { provider, savedAtMs: Date.now() };
             claudeRateLimitedUntil = 0;
