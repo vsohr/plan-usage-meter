@@ -3,7 +3,7 @@
 #   - app icon into the hicolor theme (from assets/app-icon.png)
 #   - .desktop launcher (app menu + Desktop folder)
 #   - XDG autostart entry (launch on login)
-#   - KWin window rule (KDE Plasma): pin bottom-right + keep above + hide from taskbar
+#   - KWin window rule (KDE Plasma): pin bottom-right + keep above + hide from taskbar + show on all virtual desktops
 #
 # Wayland forbids a client from positioning or raising itself, so the pin/always-on-top
 # behaviour is delegated to a KWin rule. The rule matches the window's app-id
@@ -89,6 +89,10 @@ if [[ -n "$KW" ]]; then
   set_rule skiptaskbar true;  set_rule skiptaskbarrule 2
   set_rule skipswitcher true; set_rule skipswitcherrule 2
   set_rule skippager true;    set_rule skippagerrule 2
+  # Empty desktops list + Force (2) = show on all virtual desktops, so the meter
+  # follows the user across workspaces instead of staying on the launch desktop.
+  # (Wayland forbids the client from setting this itself, like above/position.)
+  set_rule desktops "";       set_rule desktopsrule 2
   # 4 = Remember: open bottom-right initially, then persist wherever it is dragged
   # (KWin writes the position back to this rule). Draggable, unlike Force (2).
   set_rule position "$POS_X,$POS_Y"; set_rule positionrule 4
